@@ -1,0 +1,35 @@
+{
+  "name": "vusd-arbitrage-bot",
+  "version": "1.0.0",
+  "description": "Flashbots arbitrage bot to maintain crvUSD/VUSD peg at $1 using VUSD minter/redeemer",
+  "main": "index.js",
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/main.js",
+    "dev": "nodemon --watch src --ext ts --exec ts-node src/main.ts",
+    "simulate": "SIMULATION_MODE=true ts-node src/main.ts"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/mitakash/vusd-arbitrage-bot.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/mitakash/vusd-arbitrage-bot/issues"
+  },
+  "homepage": "https://github.com/mitakash/vusd-arbitrage-bot#readme",
+  "dependencies": {
+    "@flashbots/ethers-provider-bundle": "^0.5.0",
+    "dotenv": "^17.2.3",
+    "ethers": "^5.7.2",
+    "winston": "^3.18.2"
+  },
+  "devDependencies": {
+    "@types/node": "^24.6.0",
+    "nodemon": "^3.1.10",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.9.3"
+  }
+}

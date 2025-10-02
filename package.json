@@ -22,14 +22,26 @@
   "homepage": "https://github.com/mitakash/vusd-arbitrage-bot#readme",
   "dependencies": {
     "@flashbots/ethers-provider-bundle": "^0.5.0",
+    "@openzeppelin/contracts": "^4.9.0",
+    "@uniswap/v3-core": "^1.0.1",
     "dotenv": "^17.2.3",
     "ethers": "^5.7.2",
     "winston": "^3.18.2"
   },
   "devDependencies": {
+    "@nomicfoundation/hardhat-chai-matchers": "^1.0.0",
+    "@nomicfoundation/hardhat-network-helpers": "^1.0.0",
+    "@nomiclabs/hardhat-ethers": "^2.2.3",
+    "@typechain/ethers-v5": "^10.2.0",
+    "@typechain/hardhat": "^6.1.2",
+    "@types/chai": "^4.3.0",
+    "@types/mocha": "^10.0.0",
     "@types/node": "^24.6.0",
+    "chai": "^4.3.0",
+    "hardhat": "^2.22.18",
     "nodemon": "^3.1.10",
     "ts-node": "^10.9.2",
+    "typechain": "^8.3.0",
     "typescript": "^5.9.3"
   }
 }

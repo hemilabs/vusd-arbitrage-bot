@@ -115,12 +115,12 @@ async function testProfitSimulator() {
       
       // Fee configuration (basis points)
       mintFeeBps: 1,           // 0.01%
-      redeemFeeBps: 10,        // 0.10%
+      redeemFeeBps: 5,        // 0.10%
       flashloanFeeBps: 1,      // 0.01%
       
       // Gas configuration
       gasUnitsEstimate: 300000,
-      ethPriceUsd: 2500,       // Approximate ETH price
+      ethPriceUsd: 0,       // Approximate ETH price, changed from 2500 to 0, ignore gas for now
       
       // Thresholds
       minProfitUsd: 5,         // Minimum $5 profit to execute
@@ -139,12 +139,12 @@ async function testProfitSimulator() {
 
     // Step 7: Test multiple flashloan amounts
     logger.info('\nStep 7: Testing multiple flashloan amounts...');
-    logger.info('Amounts to test: $1,000, $5,000, $10,000 USDC');
+    logger.info('Amounts to test: $1, $10,  $1,000, $5,000, $10,000 USDC');
     logger.info('-'.repeat(70));
     
     const bestResult = await simulator.findBestFlashloanAmount(
       scenario,
-      [1000, 5000, 10000]
+      [1, 10, 1000, 5000, 10000]
     );
 
     // Step 8: Display detailed results

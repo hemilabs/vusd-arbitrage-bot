@@ -61,7 +61,7 @@ async function main() {
   const mainnetData = await checkOracle(mainnetUrl, 'REAL MAINNET');
   
   // Check Tenderly fork
-  const tenderlyUrl = "https://virtual.mainnet.eu.rpc.tenderly.co/fefb5542-60fb-4d31-a6a1-4c4b93a5fe6f";
+  const tenderlyUrl = "https://virtual.mainnet.eu.rpc.tenderly.co/8d322a00-ec8f-4c00-8734-d9bb730566e0";
   const forkData = await checkOracle(tenderlyUrl, 'TENDERLY FORK');
   
   // Compare

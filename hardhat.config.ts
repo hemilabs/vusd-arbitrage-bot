@@ -17,14 +17,18 @@ const config: HardhatUserConfig = {
         enabled: true,
         runs: 200,
       },
-      //viaIR: true,
+      viaIR: true,
     },
   },
   networks: {
     hardhat: {
       forking: {
         url: process.env.ETHEREUM_RPC_URL || "",
-        blockNumber: undefined, // Latest block
+        //blockNumber: undefined, // Latest block
+	// PINNED TO SPECIFIC BLOCK - matches Tenderly fork
+        // This ensures consistent state across test runs
+        // Block 23526834 - matches your Tenderly fork for comparison
+        blockNumber: 23526834,
       },
     },
     // ==========================================================
@@ -32,7 +36,7 @@ const config: HardhatUserConfig = {
     // ==========================================================
     tenderly: {
       // 1. Paste the RPC URL you copied from your Tenderly Fork dashboard here.
-      url: "https://virtual.mainnet.eu.rpc.tenderly.co/fefb5542-60fb-4d31-a6a1-4c4b93a5fe6f",
+      url: "https://virtual.mainnet.eu.rpc.tenderly.co/8d322a00-ec8f-4c00-8734-d9bb730566e0",
       
       // 2. This uses the private key from your .env file to sign transactions.
       accounts: process.env.SEARCHER_PRIVATE_KEY ? [process.env.SEARCHER_PRIVATE_KEY] : [],

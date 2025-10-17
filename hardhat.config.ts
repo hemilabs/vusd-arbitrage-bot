@@ -28,13 +28,12 @@ const config: HardhatUserConfig = {
         blockNumber: 23599652,
       },
     },
-    // TENDERLY FORK - FRESH BLOCK (October 17, 2025)
-    // IMPORTANT: This Tenderly fork must be recreated regularly to avoid stale Chainlink oracle prices
+    // TENDERLY FORK - Uses TENDERLY_RPC_URL from .env
+    // IMPORTANT: Create fresh Tenderly forks regularly to avoid stale Chainlink oracle prices
     // Chainlink price feeds update frequently and old forks will have outdated prices
-    // Current fork created at block 23599652
-    // If oracle prices seem wrong, create a new Tenderly fork at a recent block
+    // To create new fork: Use Tenderly dashboard, fork at latest block, update TENDERLY_RPC_URL in .env
     tenderly: {
-      url: "https://virtual.mainnet.eu.rpc.tenderly.co/11b432e4-2345-4d88-8147-d9c365506cbb",
+      url: process.env.TENDERLY_RPC_URL || "",
       // Scripts load their own signers from keystore using src/utils/keystore-utils.ts
       // No accounts needed in hardhat config for security reasons
       accounts: [],

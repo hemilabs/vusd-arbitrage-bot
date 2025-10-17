@@ -5,6 +5,8 @@ ETHEREUM_RPC_URL=https://eth-mainnet.g.alchemy.com/v2/your_private_key
 SEARCHER_PRIVATE_KEY=independent_private_key
 FLASHBOTS_AUTH_KEY=independent_different_private_key
 
+KEYSTORE_PATH=[full_path]/searcher.json
+
 # Contract Addresses
 USDC_ADDRESS=0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48
 CRVUSD_ADDRESS=0xf939E0A03FB07F59A73314E73794Be0E57ac1b4E

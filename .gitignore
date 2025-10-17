@@ -149,3 +149,26 @@ coverage.json
 # Hardhat Ignition default folder for deployments against a local node
 ignition/deployments/chain-31337
 history_commands.txt
+
+# Deployment artifacts
+deployments/
+
+# Backup files
+backups/
+*.backup
+*_BACKUP_*
+
+# Environment files (NEVER commit these!)
+.env
+.env.local
+.env.*.local
+
+# Keystore (will be added later when we have encrypted keystore)
+keystore/
+*.json.keystore
+
+# BROKEN Tenderly funding scripts (DO NOT COMMIT)
+scripts/fund-tenderly-wallet.ts
+scripts/fund-tenderly.sh
+
+# NOTE: fund-tenderly-simple.sh is GOOD and should be committed!

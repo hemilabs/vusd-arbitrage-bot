@@ -163,9 +163,8 @@ backups/
 .env.local
 .env.*.local
 
-# Keystore (will be added later when we have encrypted keystore)
-keystore/
-*.json.keystore
+# Keystore
+keystore/*.json
 
 # BROKEN Tenderly funding scripts (DO NOT COMMIT)
 scripts/fund-tenderly-wallet.ts

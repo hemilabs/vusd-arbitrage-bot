@@ -1,83 +1,111 @@
 // scripts/test-env.ts
-// Quick script to test environment variables and RPC connection
+// Validates environment configuration and keystore setup
+// Tests RPC connection, keystore loading, and wallet balance
 
 import * as dotenv from 'dotenv';
 import { ethers } from 'ethers';
+import { loadWallet } from '../src/utils/keystore-utils';
+import { promises as fs } from 'fs';
 
 dotenv.config();
 
 async function main() {
-  console.log('🔍 Testing Environment Configuration...\n');
+  console.log('Testing Environment Configuration...\n');
 
   // Check ETHEREUM_RPC_URL
   const rpcUrl = process.env.ETHEREUM_RPC_URL;
   if (!rpcUrl) {
-    console.error('❌ ETHEREUM_RPC_URL is not set in .env file');
+    console.error('ERROR: ETHEREUM_RPC_URL is not set in .env file');
     process.exit(1);
   }
-  console.log(`✅ ETHEREUM_RPC_URL is set`);
+  console.log(`ETHEREUM_RPC_URL is set`);
   console.log(`   ${rpcUrl.substring(0, 40)}...`);
 
-  // Check SEARCHER_PRIVATE_KEY
-  const privateKey = process.env.SEARCHER_PRIVATE_KEY;
-  if (!privateKey) {
-    console.error('❌ SEARCHER_PRIVATE_KEY is not set in .env file');
+  // Check TENDERLY_RPC_URL
+  const tenderlyRpcUrl = process.env.TENDERLY_RPC_URL;
+  if (!tenderlyRpcUrl) {
+    console.error('WARNING: TENDERLY_RPC_URL is not set in .env file');
+    console.log('   Add it for Tenderly testing');
+  } else {
+    console.log(`TENDERLY_RPC_URL is set`);
+    console.log(`   ${tenderlyRpcUrl.substring(0, 40)}...`);
+  }
+
+  // Check KEYSTORE_PATH
+  const keystorePath = process.env.KEYSTORE_PATH;
+  if (!keystorePath) {
+    console.error('\nERROR: KEYSTORE_PATH is not set in .env file');
+    console.error('Please add: KEYSTORE_PATH=./keystore/searcher.json');
     process.exit(1);
   }
   
-  if (!privateKey.startsWith('0x')) {
-    console.error('❌ SEARCHER_PRIVATE_KEY must start with 0x');
+  console.log(`\nKEYSTORE_PATH is set`);
+  console.log(`   ${keystorePath}`);
+  
+  // Check if keystore file exists
+  try {
+    await fs.access(keystorePath);
+    console.log(`   Keystore file exists`);
+  } catch (error) {
+    console.error(`\nERROR: Keystore file not found at: ${keystorePath}`);
+    console.error('Create it with: yarn ts-node scripts/create-keystore.ts');
     process.exit(1);
   }
-  
-  if (privateKey.length !== 66) {
-    console.error(`❌ SEARCHER_PRIVATE_KEY has wrong length: ${privateKey.length} (should be 66)`);
-    process.exit(1);
-  }
-  
-  console.log(`✅ SEARCHER_PRIVATE_KEY is set (length: ${privateKey.length})`);
-  console.log(`   ${privateKey.substring(0, 10)}...${privateKey.substring(62)}`);
 
   // Test RPC connection
-  console.log('\n🔌 Testing RPC connection...');
+  console.log('\nTesting RPC connection...');
   try {
     const provider = new ethers.providers.JsonRpcProvider(rpcUrl);
     const network = await provider.getNetwork();
-    console.log(`✅ Connected to ${network.name} (chainId: ${network.chainId})`);
+    console.log(`   Connected to ${network.name} (chainId: ${network.chainId})`);
     
     const blockNumber = await provider.getBlockNumber();
-    console.log(`✅ Current block: ${blockNumber}`);
+    console.log(`   Current block: ${blockNumber}`);
     
     const gasPrice = await provider.getGasPrice();
     const gasPriceGwei = parseFloat(ethers.utils.formatUnits(gasPrice, 'gwei'));
-    console.log(`✅ Gas price: ${gasPriceGwei.toFixed(3)} gwei`);
+    console.log(`   Gas price: ${gasPriceGwei.toFixed(3)} gwei`);
     
-    // Test wallet
-    console.log('\n👛 Testing wallet...');
-    const wallet = new ethers.Wallet(privateKey, provider);
-    console.log(`✅ Wallet address: ${wallet.address}`);
+  } catch (error: any) {
+    console.error('\nERROR: RPC connection failed:', error.message);
+    process.exit(1);
+  }
+
+  // Test keystore wallet loading
+  console.log('\nTesting keystore wallet...');
+  console.log('   You will be prompted for your keystore password\n');
+  
+  try {
+    const provider = new ethers.providers.JsonRpcProvider(rpcUrl);
+    const wallet = await loadWallet(provider);
+    console.log(`\n   Wallet loaded successfully`);
+    console.log(`   Address: ${wallet.address}`);
     
     const balance = await wallet.getBalance();
     const balanceEth = ethers.utils.formatEther(balance);
-    console.log(`✅ Wallet balance: ${balanceEth} ETH`);
+    console.log(`   Balance: ${balanceEth} ETH`);
     
     if (balance.lt(ethers.utils.parseEther('0.003'))) {
-      console.warn(`⚠️  Warning: Balance is low (need ~0.003 ETH for deployment)`);
+      console.warn(`   WARNING: Balance is low (need ~0.003 ETH for deployment)`);
+    } else {
+      console.log(`   Balance is sufficient for deployment`);
     }
     
     // Test transaction count
     const txCount = await wallet.getTransactionCount();
     const pendingTxCount = await wallet.getTransactionCount('pending');
-    console.log(`✅ Transaction count: ${txCount} (pending: ${pendingTxCount})`);
-    
-    console.log('\n✅ ALL CHECKS PASSED!');
-    console.log('\nYou can now deploy with:');
-    console.log('  npx ts-node scripts/deploy-vusd-arbitrage-robust.ts');
+    console.log(`   Transaction count: ${txCount} (pending: ${pendingTxCount})`);
     
   } catch (error: any) {
-    console.error('\n❌ RPC connection failed:', error.message);
+    console.error('\nERROR: Keystore wallet test failed:', error.message);
     process.exit(1);
   }
+
+  console.log('\nALL CHECKS PASSED');
+  console.log('\nYou can now deploy with:');
+  console.log('  yarn hardhat run scripts/deploy-tenderly.ts --network tenderly');
+  console.log('  OR');
+  console.log('  yarn ts-node scripts/deploy-vusd-arbitrage-robust.ts');
 }
 
 main().catch((error) => {

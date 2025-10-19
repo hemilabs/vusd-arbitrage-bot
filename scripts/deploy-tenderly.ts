@@ -1,11 +1,13 @@
 // scripts/deploy-tenderly.ts
-// TENDERLY-COMPATIBLE VERSION: Uses Hardhat's ethers provider to respect --network flag
+// Deploy VusdArbitrage contract to Tenderly fork
+// Uses keystore for secure wallet management
 
 import { ethers } from 'hardhat';
 import { VusdArbitrage__factory } from '../typechain-types';
 import * as dotenv from 'dotenv';
 import * as fs from 'fs';
 import * as path from 'path';
+import { loadWallet } from '../src/utils/keystore-utils';
 
 dotenv.config();
 
@@ -15,38 +17,39 @@ const POOL_ABI = [
 ];
 
 async function main() {
-  console.log('🚀 Deploying VusdArbitrage Contract\n');
+  console.log('Deploying VusdArbitrage Contract to Tenderly\n');
 
-  // Get signer from Hardhat - this respects --network flag!
-  const [deployer] = await ethers.getSigners();
-  console.log('💼 Deployer:', deployer.address);
+  // Load wallet from keystore (will prompt for password)
+  console.log('Loading wallet from keystore...');
+  const deployer = await loadWallet(ethers.provider);
+  console.log('Deployer:', deployer.address);
 
   // Get network info
   const network = await ethers.provider.getNetwork();
-  console.log('🌐 Network:', network.name || `Chain ID ${network.chainId}`);
-  console.log('🔗 Chain ID:', network.chainId);
+  console.log('Network:', network.name || `Chain ID ${network.chainId}`);
+  console.log('Chain ID:', network.chainId);
 
   // Check balance
   const balance = await deployer.getBalance();
-  console.log('💰 Balance:', ethers.utils.formatEther(balance), 'ETH');
+  console.log('Balance:', ethers.utils.formatEther(balance), 'ETH');
 
   // Get gas prices from network
-  console.log('\n⛽ Fetching gas prices...');
+  console.log('\nFetching gas prices...');
   const feeData = await ethers.provider.getFeeData();
   
   const latestBlock = await ethers.provider.getBlock('latest');
   const currentBaseFee = latestBlock.baseFeePerGas;
   
-  console.log('📊 Gas Situation:');
+  console.log('Gas Situation:');
   console.log(`   Base Fee: ${ethers.utils.formatUnits(currentBaseFee || 0, 'gwei')} gwei`);
   console.log(`   Suggested Max Fee: ${ethers.utils.formatUnits(feeData.maxFeePerGas || 0, 'gwei')} gwei`);
   console.log(`   Suggested Priority Fee: ${ethers.utils.formatUnits(feeData.maxPriorityFeePerGas || 0, 'gwei')} gwei`);
 
-  // Use network's suggested fees + 50% buffer
+  // Use network's suggested fees with 50% buffer
   const maxFeePerGas = feeData.maxFeePerGas!.mul(150).div(100);
   const maxPriorityFeePerGas = feeData.maxPriorityFeePerGas!.mul(150).div(100);
 
-  console.log('\n✅ Using (with 50% buffer):');
+  console.log('\nUsing (with 50% buffer):');
   console.log(`   Max Fee: ${ethers.utils.formatUnits(maxFeePerGas, 'gwei')} gwei`);
   console.log(`   Priority Fee: ${ethers.utils.formatUnits(maxPriorityFeePerGas, 'gwei')} gwei`);
 
@@ -70,12 +73,12 @@ async function main() {
   };
 
   // Validate USDC position in pool
-  console.log('\n🔍 Validating pool configuration...');
+  console.log('\nValidating pool configuration...');
   const poolContract = new ethers.Contract(addresses.defaultUniswapV3Pool, POOL_ABI, ethers.provider);
   const token1Address = await poolContract.token1();
   const usdcIsToken1 = token1Address.toLowerCase() === addresses.usdc.toLowerCase();
   console.log(`   Pool: ${addresses.defaultUniswapV3Pool}`);
-  console.log(`   USDC is token${usdcIsToken1 ? '1' : '0'}: ✅`);
+  console.log(`   USDC is token${usdcIsToken1 ? '1' : '0'}`);
 
   // Curve pool indices
   const usdcIndex = 0;
@@ -83,10 +86,10 @@ async function main() {
   const crvUsdIndexInVusdPool = 0;
   const vusdIndex = 1;
 
-  console.log('\n🚢 Deploying contract...');
+  console.log('\nDeploying contract...');
 
-  // Get contract factory
-  const VusdArbitrage = await ethers.getContractFactory('VusdArbitrage', deployer);
+  // Get contract factory with deployer as signer
+  const VusdArbitrage = new VusdArbitrage__factory(deployer);
 
   // Get current nonce
   const nonce = await deployer.getTransactionCount();
@@ -114,25 +117,22 @@ async function main() {
     }
   );
 
-  console.log('\n📤 Transaction broadcast!');
+  console.log('\nTransaction broadcast!');
   console.log(`   Hash: ${contract.deployTransaction.hash}`);
   console.log(`   Nonce: ${contract.deployTransaction.nonce}`);
 
-  console.log('\n⏳ Waiting for confirmation...');
+  console.log('\nWaiting for confirmation...');
   await contract.deployed();
 
-  console.log('\n🎉🎉🎉 SUCCESS! 🎉🎉🎉\n');
-  console.log('╔═══════════════════════════════════════════════════╗');
-  console.log('║            CONTRACT DEPLOYED!                     ║');
-  console.log('╠═══════════════════════════════════════════════════╣');
-  console.log(`║  ${contract.address}  ║`);
-  console.log('╚═══════════════════════════════════════════════════╝');
+  console.log('\nSUCCESS\n');
+  console.log('CONTRACT DEPLOYED');
+  console.log(`Address: ${contract.address}`);
 
   // Get deployment receipt
   const receipt = await contract.deployTransaction.wait();
-  console.log(`\n📦 Block: ${receipt.blockNumber}`);
-  console.log(`⛽ Gas Used: ${receipt.gasUsed.toString()}`);
-  console.log(`💰 Actual Cost: ${ethers.utils.formatEther(receipt.gasUsed.mul(receipt.effectiveGasPrice))} ETH`);
+  console.log(`\nBlock: ${receipt.blockNumber}`);
+  console.log(`Gas Used: ${receipt.gasUsed.toString()}`);
+  console.log(`Actual Cost: ${ethers.utils.formatEther(receipt.gasUsed.mul(receipt.effectiveGasPrice))} ETH`);
 
   // Save deployment info
   const deploymentInfo = {
@@ -159,22 +159,22 @@ async function main() {
     JSON.stringify(deploymentInfo, null, 2)
   );
 
-  console.log(`\n✅ Deployment info saved to deployments/${filename}`);
+  console.log(`\nDeployment info saved to deployments/${filename}`);
 
   // Network-specific links
   if (network.chainId === 1) {
-    console.log(`\n🔗 View on Etherscan: https://etherscan.io/address/${contract.address}`);
+    console.log(`\nView on Etherscan: https://etherscan.io/address/${contract.address}`);
   } else {
-    console.log(`\n📍 Deployed on network: ${network.name || network.chainId}`);
-    console.log(`📍 Contract address: ${contract.address}`);
+    console.log(`\nDeployed on network: ${network.name || network.chainId}`);
+    console.log(`Contract address: ${contract.address}`);
   }
 
-  console.log('\n🎊 Deployment complete!\n');
+  console.log('\nDeployment complete!\n');
 }
 
 main()
   .then(() => process.exit(0))
   .catch((error) => {
-    console.error('\n💥 Deployment failed:', error.message);
+    console.error('\nDeployment failed:', error.message);
     process.exit(1);
   });

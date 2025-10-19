@@ -1,11 +1,13 @@
 // scripts/deploy-vusd-arbitrage-robust.ts
 // ROBUST VERSION: Handles timeouts, retries, and better error reporting
+// Uses keystore for secure wallet management
 
 import { ethers, Contract } from 'ethers';
 import { VusdArbitrage__factory } from '../typechain-types';
 import * as dotenv from 'dotenv';
 import * as fs from 'fs';
 import * as path from 'path';
+import { loadWallet } from '../src/utils/keystore-utils';
 
 dotenv.config();
 
@@ -19,35 +21,36 @@ const POOL_ABI = [
 ];
 
 async function main() {
-  console.log('🚀 Starting ROBUST VUSD Arbitrage Contract Deployment...\n');
+  console.log('Starting ROBUST VUSD Arbitrage Contract Deployment...\n');
 
-  // --- 1. Setup Provider and Wallet ---
+  // Setup Provider
   const rpcUrl = process.env.ETHEREUM_RPC_URL;
-  const privateKey = process.env.SEARCHER_PRIVATE_KEY;
 
-  if (!rpcUrl || !privateKey) {
-    throw new Error('Missing ETHEREUM_RPC_URL or SEARCHER_PRIVATE_KEY in .env file');
+  if (!rpcUrl) {
+    throw new Error('Missing ETHEREUM_RPC_URL in .env file');
   }
 
-  console.log('🔌 Connecting to RPC...');
+  console.log('Connecting to RPC...');
   const provider = new ethers.providers.JsonRpcProvider(rpcUrl);
   
   // Test connection
   try {
     const network = await provider.getNetwork();
-    console.log(`✅ Connected to ${network.name} (chainId: ${network.chainId})`);
+    console.log(`   Connected to ${network.name} (chainId: ${network.chainId})`);
   } catch (error) {
-    console.error('❌ Failed to connect to RPC');
+    console.error('   Failed to connect to RPC');
     throw error;
   }
 
-  const wallet = new ethers.Wallet(privateKey, provider);
-  console.log(`✅ Deployer wallet loaded: ${wallet.address}`);
+  // Load wallet from keystore (will prompt for password)
+  console.log('\nLoading wallet from keystore...');
+  const wallet = await loadWallet(provider);
+  console.log(`   Deployer wallet: ${wallet.address}`);
 
   // Check balance
   const balance = await wallet.getBalance();
   const balanceEth = ethers.utils.formatEther(balance);
-  console.log(`💰 Wallet balance: ${balanceEth} ETH`);
+  console.log(`   Wallet balance: ${balanceEth} ETH`);
   
   if (balance.lt(ethers.utils.parseEther('0.003'))) {
     throw new Error(`Insufficient balance! Have ${balanceEth} ETH, need at least 0.003 ETH`);
@@ -56,10 +59,10 @@ async function main() {
   // Check current gas price
   const gasPrice = await provider.getGasPrice();
   const gasPriceGwei = parseFloat(ethers.utils.formatUnits(gasPrice, 'gwei'));
-  console.log(`⛽ Current gas price: ${gasPriceGwei.toFixed(3)} gwei`);
+  console.log(`   Current gas price: ${gasPriceGwei.toFixed(3)} gwei`);
 
-  // --- 2. Load Contract Addresses from .env ---
-  console.log('\n📋 Loading configuration...');
+  // Load Contract Addresses from .env
+  console.log('\nLoading configuration...');
   const addresses = {
     usdc: process.env.USDC_ADDRESS!,
     crvUsd: process.env.CRVUSD_ADDRESS!,
@@ -74,10 +77,10 @@ async function main() {
   for (const [key, value] of Object.entries(addresses)) {
     if (!value) throw new Error(`Missing ${key.toUpperCase()} address in .env file`);
   }
-  console.log('✅ All required addresses loaded');
+  console.log('   All required addresses loaded');
 
-  // --- 3. Discover Curve Pool Token Indices ---
-  console.log('\n🔍 Discovering Curve pool token indices...');
+  // Discover Curve Pool Token Indices
+  console.log('\nDiscovering Curve pool token indices...');
 
   const crvUsdUsdcPool = new Contract(addresses.curveCrvusdUsdcPool, CURVE_POOL_ABI, provider);
   const crvUsdVusdPool = new Contract(addresses.curveCrvusdVusdPool, CURVE_POOL_ABI, provider);
@@ -94,7 +97,7 @@ async function main() {
   if (discoveredCrvUsdAddress1.toLowerCase() !== addresses.crvUsd.toLowerCase()) {
     throw new Error(`CRITICAL: crvUSD/USDC pool index 1 is NOT crvUSD!`);
   }
-  console.log(`   ✅ crvUSD/USDC Pool verified`);
+  console.log(`   crvUSD/USDC Pool verified`);
 
   const crvUsdIndexInVusdPool = 0;
   const vusdIndex = 1;
@@ -108,10 +111,10 @@ async function main() {
   if (discoveredVusdAddress.toLowerCase() !== addresses.vusd.toLowerCase()) {
     throw new Error(`CRITICAL: crvUSD/VUSD pool index 1 is NOT VUSD!`);
   }
-  console.log(`   ✅ crvUSD/VUSD Pool verified`);
+  console.log(`   crvUSD/VUSD Pool verified`);
 
-  // --- 4. Detect USDC Position ---
-  console.log('\n🔍 Detecting USDC position in Uniswap V3 pool...');
+  // Detect USDC Position
+  console.log('\nDetecting USDC position in Uniswap V3 pool...');
 
   const poolContract = new Contract(addresses.defaultUniswapV3Pool, POOL_ABI, provider);
   
@@ -121,17 +124,17 @@ async function main() {
   let usdcIsToken1: boolean;
   if (token0Address.toLowerCase() === addresses.usdc.toLowerCase()) {
     usdcIsToken1 = false;
-    console.log('   ✅ USDC is token0');
+    console.log('   USDC is token0');
   } else if (token1Address.toLowerCase() === addresses.usdc.toLowerCase()) {
     usdcIsToken1 = true;
-    console.log('   ✅ USDC is token1');
+    console.log('   USDC is token1');
   } else {
     throw new Error(`CRITICAL: Pool does not contain USDC!`);
   }
 
-  // --- 5. Deploy the Contract ---
-  console.log('\n🚢 Deploying VusdArbitrage contract...');
-  console.log('─'.repeat(80));
+  // Deploy the Contract
+  console.log('\nDeploying VusdArbitrage contract...');
+  console.log('='.repeat(80));
   
   const vusdArbitrageFactory = new VusdArbitrage__factory(wallet);
 
@@ -157,19 +160,19 @@ async function main() {
     vusdIndex,
     {
       gasLimit: 5000000,
-      maxFeePerGas: gasPrice.mul(2), // 2x current gas price
-      maxPriorityFeePerGas: ethers.utils.parseUnits('2', 'gwei'), // 2 gwei tip
+      maxFeePerGas: gasPrice.mul(2),
+      maxPriorityFeePerGas: ethers.utils.parseUnits('2', 'gwei'),
       nonce: nonce,
     }
   );
 
-  console.log(`\n📤 Transaction broadcast!`);
+  console.log(`\nTransaction broadcast!`);
   console.log(`   Hash: ${contract.deployTransaction.hash}`);
   console.log(`   From: ${contract.deployTransaction.from}`);
   console.log(`   Nonce: ${contract.deployTransaction.nonce}`);
   console.log(`   Gas Limit: ${contract.deployTransaction.gasLimit?.toString()}`);
   
-  console.log('\n⏳ Waiting for transaction to be mined...');
+  console.log('\nWaiting for transaction to be mined...');
   console.log('   (This may take 15-30 seconds)');
   
   // Wait with timeout
@@ -183,7 +186,7 @@ async function main() {
     ]) as any;
   } catch (error: any) {
     if (error.message.includes('Timeout')) {
-      console.log('\n⚠️  Transaction taking longer than expected...');
+      console.log('\nTransaction taking longer than expected...');
       console.log(`   Check status on Etherscan:`);
       console.log(`   https://etherscan.io/tx/${contract.deployTransaction.hash}`);
       throw error;
@@ -191,10 +194,10 @@ async function main() {
     throw error;
   }
 
-  console.log('\n✅ Transaction mined!');
+  console.log('\nTransaction mined!');
   console.log(`   Block: ${receipt.blockNumber}`);
   console.log(`   Gas Used: ${receipt.gasUsed.toString()}`);
-  console.log(`   Status: ${receipt.status === 1 ? 'SUCCESS ✅' : 'FAILED ❌'}`);
+  console.log(`   Status: ${receipt.status === 1 ? 'SUCCESS' : 'FAILED'}`);
 
   if (receipt.status !== 1) {
     throw new Error('Deployment transaction failed on-chain');
@@ -202,15 +205,13 @@ async function main() {
 
   const contractAddress = receipt.contractAddress;
   
-  console.log('\n🎉🎉🎉 CONTRACT DEPLOYED SUCCESSFULLY! 🎉🎉🎉\n');
-  console.log('╔════════════════════════════════════════════════╗');
-  console.log(`║  CONTRACT ADDRESS:                             ║`);
-  console.log(`║  ${contractAddress}  ║`);
-  console.log('╚════════════════════════════════════════════════╝');
+  console.log('\nCONTRACT DEPLOYED SUCCESSFULLY\n');
+  console.log('CONTRACT ADDRESS');
+  console.log(`${contractAddress}`);
   console.log('');
   console.log(`View on Etherscan: https://etherscan.io/address/${contractAddress}`);
 
-  // --- 6. Save Deployment Info ---
+  // Save Deployment Info
   const deploymentInfo = {
     address: contractAddress,
     network: (await provider.getNetwork()).name,
@@ -235,7 +236,7 @@ async function main() {
     JSON.stringify(deploymentInfo, null, 2)
   );
 
-  console.log(`\n✅ Deployment info saved to ${deploymentFilePath}`);
+  console.log(`\nDeployment info saved to ${deploymentFilePath}`);
   
   // Display summary
   console.log('\n' + '='.repeat(80));
@@ -259,7 +260,7 @@ async function main() {
   console.log(`  crvUSD/VUSD:        crvUSD=${crvUsdIndexInVusdPool}, VUSD=${vusdIndex}`);
   console.log('='.repeat(80));
   console.log('');
-  console.log('✅ Deployment complete!');
+  console.log('Deployment complete!');
   console.log('');
   console.log('Next steps:');
   console.log('  1. Verify contract on Etherscan (optional but recommended)');
@@ -269,7 +270,7 @@ async function main() {
 }
 
 main().catch((error) => {
-  console.error('\n💥 Deployment failed:');
+  console.error('\nDeployment failed:');
   console.error(error.message);
   if (error.transaction) {
     console.error('\nTransaction details:');

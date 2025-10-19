@@ -1,11 +1,13 @@
 // scripts/replace-stuck-deployment.ts
-// Replace the stuck deployment transaction with higher gas
+// Replace a stuck deployment transaction with higher gas
+// Uses keystore for secure wallet management
 
 import { ethers, Contract } from 'ethers';
 import { VusdArbitrage__factory } from '../typechain-types';
 import * as dotenv from 'dotenv';
 import * as fs from 'fs';
 import * as path from 'path';
+import { loadWallet } from '../src/utils/keystore-utils';
 
 dotenv.config();
 
@@ -19,26 +21,29 @@ const POOL_ABI = [
 ];
 
 async function main() {
-  console.log('🔄 REPLACING STUCK DEPLOYMENT TRANSACTION\n');
+  console.log('REPLACING STUCK DEPLOYMENT TRANSACTION\n');
 
   const rpcUrl = process.env.ETHEREUM_RPC_URL;
-  const privateKey = process.env.SEARCHER_PRIVATE_KEY;
 
-  if (!rpcUrl || !privateKey) {
-    throw new Error('Missing ETHEREUM_RPC_URL or SEARCHER_PRIVATE_KEY in .env file');
+  if (!rpcUrl) {
+    throw new Error('Missing ETHEREUM_RPC_URL in .env file');
   }
 
   const provider = new ethers.providers.JsonRpcProvider(rpcUrl);
-  const wallet = new ethers.Wallet(privateKey, provider);
   
-  console.log('📊 Checking current status...');
+  // Load wallet from keystore (will prompt for password)
+  console.log('Loading wallet from keystore...');
+  const wallet = await loadWallet(provider);
+  console.log('Deployer:', wallet.address);
+  
+  console.log('\nChecking current status...');
   const currentNonce = await wallet.getTransactionCount();
   const pendingNonce = await wallet.getTransactionCount('pending');
   console.log(`   Current nonce: ${currentNonce}`);
   console.log(`   Pending nonce: ${pendingNonce}`);
   
   if (currentNonce !== 0 || pendingNonce !== 0) {
-    console.log('\n⚠️  Warning: Nonce is not 0. This might mean:');
+    console.log('\nWARNING: Nonce is not 0. This might mean:');
     console.log('   - The original transaction already went through');
     console.log('   - OR there are multiple pending transactions');
     console.log('\nLet me check the stuck transaction...');
@@ -47,9 +52,9 @@ async function main() {
     const receipt = await provider.getTransactionReceipt(stuckTxHash);
     
     if (receipt) {
-      console.log(`\n✅ Good news! The original transaction was MINED!`);
+      console.log(`\nGood news! The original transaction was MINED!`);
       console.log(`   Block: ${receipt.blockNumber}`);
-      console.log(`   Status: ${receipt.status === 1 ? 'SUCCESS ✅' : 'FAILED ❌'}`);
+      console.log(`   Status: ${receipt.status === 1 ? 'SUCCESS' : 'FAILED'}`);
       console.log(`   Contract Address: ${receipt.contractAddress}`);
       console.log(`\nView on Etherscan: https://etherscan.io/address/${receipt.contractAddress}`);
       return;
@@ -59,20 +64,19 @@ async function main() {
   // Get current gas prices
   const feeData = await provider.getFeeData();
   const currentGasPrice = feeData.gasPrice || ethers.utils.parseUnits('2', 'gwei');
-  console.log(`\n⛽ Current network gas price: ${ethers.utils.formatUnits(currentGasPrice, 'gwei')} gwei`);
+  console.log(`\nCurrent network gas price: ${ethers.utils.formatUnits(currentGasPrice, 'gwei')} gwei`);
   
-  // Use much higher gas to ensure it goes through
-  // Multiply by 3 to be safe
+  // Use much higher gas to ensure it goes through (3x current)
   const newMaxFeePerGas = currentGasPrice.mul(3);
   const newMaxPriorityFee = ethers.utils.parseUnits('2', 'gwei');
   
-  console.log(`\n🚀 Will use higher gas for replacement:`);
+  console.log(`\nWill use higher gas for replacement:`);
   console.log(`   Max Fee: ${ethers.utils.formatUnits(newMaxFeePerGas, 'gwei')} gwei (3x current)`);
   console.log(`   Priority Fee: ${ethers.utils.formatUnits(newMaxPriorityFee, 'gwei')} gwei`);
 
   const balance = await wallet.getBalance();
   const estimatedCost = newMaxFeePerGas.mul(5000000);
-  console.log(`\n💰 Cost estimate:`);
+  console.log(`\nCost estimate:`);
   console.log(`   Max cost: ${ethers.utils.formatEther(estimatedCost)} ETH`);
   console.log(`   Your balance: ${ethers.utils.formatEther(balance)} ETH`);
   
@@ -103,7 +107,7 @@ async function main() {
   const token1Address = await poolContract.token1();
   const usdcIsToken1 = token1Address.toLowerCase() === addresses.usdc.toLowerCase();
 
-  console.log('\n🚢 Sending REPLACEMENT deployment transaction...');
+  console.log('\nSending REPLACEMENT deployment transaction...');
   console.log('   This will REPLACE the stuck transaction!');
   
   const vusdArbitrageFactory = new VusdArbitrage__factory(wallet);
@@ -126,23 +130,23 @@ async function main() {
       gasLimit: 5000000,
       maxFeePerGas: newMaxFeePerGas,
       maxPriorityFeePerGas: newMaxPriorityFee,
-      nonce: 0, // SAME NONCE - this replaces the stuck transaction!
+      nonce: 0, // SAME NONCE - this replaces the stuck transaction
     }
   );
 
-  console.log(`\n📤 REPLACEMENT Transaction broadcast!`);
+  console.log(`\nREPLACEMENT Transaction broadcast!`);
   console.log(`   Hash: ${contract.deployTransaction.hash}`);
   console.log(`   Nonce: 0 (replacing stuck transaction)`);
   console.log(`   Max Fee: ${ethers.utils.formatUnits(newMaxFeePerGas, 'gwei')} gwei`);
   console.log(`\n   View on Etherscan: https://etherscan.io/tx/${contract.deployTransaction.hash}`);
-  console.log('\n⏳ Waiting for confirmation (with higher gas, should be faster)...');
+  console.log('\nWaiting for confirmation (with higher gas, should be faster)...');
 
   const receipt = await contract.deployTransaction.wait(2);
 
-  console.log('\n✅ Transaction mined!');
+  console.log('\nTransaction mined!');
   console.log(`   Block: ${receipt.blockNumber}`);
   console.log(`   Gas Used: ${receipt.gasUsed.toString()}`);
-  console.log(`   Status: ${receipt.status === 1 ? 'SUCCESS ✅' : 'FAILED ❌'}`);
+  console.log(`   Status: ${receipt.status === 1 ? 'SUCCESS' : 'FAILED'}`);
 
   if (receipt.status !== 1) {
     throw new Error('Deployment transaction failed on-chain');
@@ -150,13 +154,10 @@ async function main() {
 
   const contractAddress = receipt.contractAddress;
   
-  console.log('\n🎉🎉🎉 CONTRACT DEPLOYED SUCCESSFULLY! 🎉🎉🎉\n');
-  console.log('╔════════════════════════════════════════════════╗');
-  console.log(`║  CONTRACT ADDRESS:                             ║`);
-  console.log(`║  ${contractAddress}  ║`);
-  console.log('╚════════════════════════════════════════════════╝');
-  console.log('');
-  console.log(`View on Etherscan: https://etherscan.io/address/${contractAddress}`);
+  console.log('\nCONTRACT DEPLOYED SUCCESSFULLY\n');
+  console.log('CONTRACT ADDRESS');
+  console.log(`${contractAddress}`);
+  console.log(`\nView on Etherscan: https://etherscan.io/address/${contractAddress}`);
 
   // Save deployment info
   const deploymentInfo = {
@@ -184,13 +185,13 @@ async function main() {
     JSON.stringify(deploymentInfo, null, 2)
   );
 
-  console.log(`\n✅ Deployment info saved to ${deploymentFilePath}`);
+  console.log(`\nDeployment info saved to ${deploymentFilePath}`);
   console.log('\n' + '='.repeat(80));
-  console.log('DEPLOYMENT COMPLETE! 🎊');
+  console.log('DEPLOYMENT COMPLETE');
   console.log('='.repeat(80));
 }
 
 main().catch((error) => {
-  console.error('\n💥 Replacement failed:', error.message);
+  console.error('\nReplacement failed:', error.message);
   process.exitCode = 1;
 });

@@ -1,6 +1,7 @@
 // scripts/deploy-vusd-arbitrage-robust.ts
 // ROBUST VERSION: Handles timeouts, retries, and better error reporting
 // Uses keystore for secure wallet management
+// FIXED: Uses proper gas pricing from network feeData
 
 import { ethers, Contract } from 'ethers';
 import { VusdArbitrage__factory } from '../typechain-types';
@@ -56,10 +57,33 @@ async function main() {
     throw new Error(`Insufficient balance! Have ${balanceEth} ETH, need at least 0.003 ETH`);
   }
 
-  // Check current gas price
-  const gasPrice = await provider.getGasPrice();
-  const gasPriceGwei = parseFloat(ethers.utils.formatUnits(gasPrice, 'gwei'));
-  console.log(`   Current gas price: ${gasPriceGwei.toFixed(3)} gwei`);
+  // Get REAL gas prices from network
+  console.log('\nFetching current gas prices from network...');
+  const feeData = await provider.getFeeData();
+  
+  // Get latest block to see actual base fee
+  const latestBlock = await provider.getBlock('latest');
+  const currentBaseFee = latestBlock.baseFeePerGas;
+  
+  console.log('Current Gas Situation:');
+  console.log(`   Base Fee: ${ethers.utils.formatUnits(currentBaseFee || 0, 'gwei')} gwei`);
+  console.log(`   Suggested Max Fee: ${ethers.utils.formatUnits(feeData.maxFeePerGas || 0, 'gwei')} gwei`);
+  console.log(`   Suggested Priority Fee: ${ethers.utils.formatUnits(feeData.maxPriorityFeePerGas || 0, 'gwei')} gwei`);
+  
+  // Use network's suggested fees + 50% buffer for safety
+  const maxFeePerGas = feeData.maxFeePerGas!.mul(150).div(100);
+  const maxPriorityFeePerGas = feeData.maxPriorityFeePerGas!.mul(150).div(100);
+  
+  console.log('\nWe will use (with 50% safety buffer):');
+  console.log(`   Max Fee: ${ethers.utils.formatUnits(maxFeePerGas, 'gwei')} gwei`);
+  console.log(`   Priority Fee: ${ethers.utils.formatUnits(maxPriorityFeePerGas, 'gwei')} gwei`);
+  
+  const estimatedCost = maxFeePerGas.mul(5000000);
+  console.log(`   Estimated max cost: ${ethers.utils.formatEther(estimatedCost)} ETH`);
+  
+  if (balance.lt(estimatedCost)) {
+    throw new Error(`Insufficient balance! Need ${ethers.utils.formatEther(estimatedCost)} ETH, have ${balanceEth} ETH`);
+  }
 
   // Load Contract Addresses from .env
   console.log('\nLoading configuration...');
@@ -142,7 +166,7 @@ async function main() {
   const nonce = await wallet.getTransactionCount();
   console.log(`Current nonce: ${nonce}`);
 
-  // Deploy with explicit gas settings
+  // Deploy with proper gas settings
   console.log('Creating deployment transaction...');
   const contract = await vusdArbitrageFactory.deploy(
     addresses.usdc,
@@ -160,8 +184,8 @@ async function main() {
     vusdIndex,
     {
       gasLimit: 5000000,
-      maxFeePerGas: gasPrice.mul(2),
-      maxPriorityFeePerGas: ethers.utils.parseUnits('2', 'gwei'),
+      maxFeePerGas: maxFeePerGas,
+      maxPriorityFeePerGas: maxPriorityFeePerGas,
       nonce: nonce,
     }
   );
@@ -171,6 +195,8 @@ async function main() {
   console.log(`   From: ${contract.deployTransaction.from}`);
   console.log(`   Nonce: ${contract.deployTransaction.nonce}`);
   console.log(`   Gas Limit: ${contract.deployTransaction.gasLimit?.toString()}`);
+  console.log(`   Max Fee: ${ethers.utils.formatUnits(maxFeePerGas, 'gwei')} gwei`);
+  console.log(`   Priority Fee: ${ethers.utils.formatUnits(maxPriorityFeePerGas, 'gwei')} gwei`);
   
   console.log('\nWaiting for transaction to be mined...');
   console.log('   (This may take 15-30 seconds)');
@@ -179,7 +205,7 @@ async function main() {
   let receipt;
   try {
     receipt = await Promise.race([
-      contract.deployTransaction.wait(1),
+      contract.deployTransaction.wait(2),
       new Promise((_, reject) => 
         setTimeout(() => reject(new Error('Timeout waiting for confirmation')), 120000)
       )
@@ -197,6 +223,7 @@ async function main() {
   console.log('\nTransaction mined!');
   console.log(`   Block: ${receipt.blockNumber}`);
   console.log(`   Gas Used: ${receipt.gasUsed.toString()}`);
+  console.log(`   Effective Gas Price: ${ethers.utils.formatUnits(receipt.effectiveGasPrice, 'gwei')} gwei`);
   console.log(`   Status: ${receipt.status === 1 ? 'SUCCESS' : 'FAILED'}`);
 
   if (receipt.status !== 1) {
@@ -223,6 +250,8 @@ async function main() {
     transactionHash: contract.deployTransaction.hash,
     blockNumber: receipt.blockNumber,
     gasUsed: receipt.gasUsed.toString(),
+    effectiveGasPrice: receipt.effectiveGasPrice.toString(),
+    actualCost: ethers.utils.formatEther(receipt.gasUsed.mul(receipt.effectiveGasPrice)),
   };
 
   const deploymentsDir = path.join(__dirname, '..', 'deployments');
@@ -249,7 +278,8 @@ async function main() {
   console.log(`Transaction:          ${contract.deployTransaction.hash}`);
   console.log(`Block:                ${receipt.blockNumber}`);
   console.log(`Gas Used:             ${receipt.gasUsed.toString()}`);
-  console.log(`Gas Price:            ${gasPriceGwei.toFixed(3)} gwei`);
+  console.log(`Effective Gas Price:  ${ethers.utils.formatUnits(receipt.effectiveGasPrice, 'gwei')} gwei`);
+  console.log(`Actual Cost:          ${deploymentInfo.actualCost} ETH`);
   console.log('');
   console.log('Pool Configuration:');
   console.log(`  Default Pool:       ${addresses.defaultUniswapV3Pool}`);

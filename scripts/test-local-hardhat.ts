@@ -38,7 +38,7 @@ async function impersonateAndFund(address: string) {
 
 async function main() {
   console.log('🧪 Testing on LOCAL Hardhat Fork with console.log\n');
-  console.log('=' .repeat(80));
+  console.log('');
 
   // Get deployer
   const [deployer] = await ethers.getSigners();
@@ -118,10 +118,10 @@ async function main() {
   const contractAsDeployer = contract.connect(deployer);
 
   // Test RICH scenario
-  console.log('\n' + '='.repeat(80));
+  console.log('');
   console.log('TEST 1: RICH SCENARIO');
   console.log('Path: USDC → crvUSD → VUSD → USDC (via redeem)');
-  console.log('='.repeat(80));
+  console.log('');
 
   const flashloanAmount = ethers.utils.parseUnits('1000', 6);
   console.log('\n💸 Flashloan Amount:', ethers.utils.formatUnits(flashloanAmount, 6), 'USDC');
@@ -131,13 +131,13 @@ async function main() {
 
   try {
     console.log('🚀 Executing RICH scenario with console.log output:\n');
-    console.log('-'.repeat(80));
+    console.log('');
     
     const tx = await contractAsDeployer.executeRichWithDefaultPool(flashloanAmount, {
       gasLimit: 5000000,
     });
     
-    console.log('\n-'.repeat(80));
+    console.log('');
     console.log('📤 Transaction sent:', tx.hash);
     
     const receipt = await tx.wait();
@@ -168,23 +168,23 @@ async function main() {
   }
 
   // Test CHEAP scenario
-  console.log('\n' + '='.repeat(80));
+  console.log('');
   console.log('TEST 2: CHEAP SCENARIO');
   console.log('Path: USDC → VUSD (via mint) → crvUSD → USDC');
-  console.log('='.repeat(80));
+  console.log('');
 
   const balanceBeforeCheap = await usdc.balanceOf(contract.address);
   console.log('\n💰 Contract Balance Before:', ethers.utils.formatUnits(balanceBeforeCheap, 6), 'USDC\n');
 
   try {
     console.log('🚀 Executing CHEAP scenario with console.log output:\n');
-    console.log('-'.repeat(80));
+    console.log('');
     
     const tx = await contractAsDeployer.executeCheapWithDefaultPool(flashloanAmount, {
       gasLimit: 5000000,
     });
     
-    console.log('\n-'.repeat(80));
+    console.log('');
     console.log('📤 Transaction sent:', tx.hash);
     
     const receipt = await tx.wait();
@@ -215,9 +215,9 @@ async function main() {
   }
 
   // Final summary
-  console.log('\n' + '='.repeat(80));
+  console.log('');
   console.log('TESTING COMPLETE');
-  console.log('='.repeat(80));
+  console.log('');
 
   const finalBalance = await usdc.balanceOf(contract.address);
   console.log('\n💰 Final Contract Balance:', ethers.utils.formatUnits(finalBalance, 6), 'USDC');

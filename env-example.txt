@@ -1,10 +1,16 @@
 # Ethereum RPC
 ETHEREUM_RPC_URL=https://eth-mainnet.g.alchemy.com/v2/your_private_key
 
+# Tenderly Fork RPC URL
+# IMPORTANT: Create fresh forks regularly (every few hours) to avoid stale Chainlink oracle prices
+# Current fork created at block 23599652 (October 17, 2025)
+TENDERLY_RPC_URL=https://virtual.mainnet.eu.rpc.tenderly.co/11b432e4-2345-4d88-8147-d9c365506cbb
+
 # Private Keys (NEVER commit .env file)
-SEARCHER_PRIVATE_KEY=independent_private_key
+#SEARCHER_PRIVATE_KEY=independent_private_key (previous code relied on private key in .env file)
 FLASHBOTS_AUTH_KEY=independent_different_private_key
 
+# Moved from searcher_private_key to keystore_path
 KEYSTORE_PATH=[full_path]/searcher.json
 
 # Contract Addresses

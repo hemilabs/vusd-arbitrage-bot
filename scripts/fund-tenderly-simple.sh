@@ -1,20 +1,33 @@
 #!/bin/bash
 # scripts/fund-tenderly-simple.sh
-# Simple version - just adds 100 ETH to your Tenderly wallet
+# Adds ETH balance to wallet on Tenderly fork
+# Uses TENDERLY_RPC_URL from .env file
 
-# CONFIGURATION
-WALLET="0x55b9c541E27c70F92E6a0679e247541D1F2665A2"
-TENDERLY_RPC="https://virtual.mainnet.eu.rpc.tenderly.co/9def9c05-33cb-4003-9278-d5dd47513dc6"
-AMOUNT_HEX="0x56BC75E2D63100000"  # 100 ETH in hex (NO leading zeros!)
+# Load environment variables
+if [ -f .env ]; then
+    export $(grep -v '^#' .env | xargs)
+fi
+
+# Check if TENDERLY_RPC_URL is set
+if [ -z "$TENDERLY_RPC_URL" ]; then
+    echo "ERROR: TENDERLY_RPC_URL not set in .env file"
+    echo "Please add: TENDERLY_RPC_URL=https://virtual.mainnet.eu.rpc.tenderly.co/YOUR-FORK-ID"
+    exit 1
+fi
+
+# Wallet address (can also read from env if needed)
+WALLET="${WALLET_ADDRESS:-0x55b9c541E27c70F92E6a0679e247541D1F2665A2}"
+AMOUNT_HEX="0x56BC75E2D63100000"  # 100 ETH in hex
 
 echo "💰 Funding Tenderly Wallet"
 echo "📍 Address: $WALLET"
 echo "💸 Amount: 100 ETH"
+echo "🌐 RPC: ${TENDERLY_RPC_URL:0:60}..."
 echo ""
 
 # Add balance
 echo "🔄 Adding balance..."
-RESPONSE=$(curl -s -X POST "$TENDERLY_RPC" \
+RESPONSE=$(curl -s -X POST "$TENDERLY_RPC_URL" \
   -H "Content-Type: application/json" \
   --data "{\"jsonrpc\":\"2.0\",\"method\":\"tenderly_addBalance\",\"params\":[\"$WALLET\",\"$AMOUNT_HEX\"],\"id\":1}")
 

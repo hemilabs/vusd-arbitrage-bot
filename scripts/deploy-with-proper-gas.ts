@@ -1,11 +1,13 @@
 // scripts/deploy-with-proper-gas.ts
 // FINAL VERSION: Uses ACTUAL current gas prices from network
+// Uses keystore for secure wallet management
 
 import { ethers, Contract } from 'ethers';
 import { VusdArbitrage__factory } from '../typechain-types';
 import * as dotenv from 'dotenv';
 import * as fs from 'fs';
 import * as path from 'path';
+import { loadWallet } from '../src/utils/keystore-utils';
 
 dotenv.config();
 
@@ -13,29 +15,30 @@ const CURVE_POOL_ABI = ['function coins(uint256 i) external view returns (addres
 const POOL_ABI = ['function token0() external view returns (address)', 'function token1() external view returns (address)'];
 
 async function main() {
-  console.log('🚀 FINAL Deployment with PROPER Gas Pricing\n');
+  console.log('FINAL Deployment with PROPER Gas Pricing\n');
 
   const rpcUrl = process.env.ETHEREUM_RPC_URL;
-  const privateKey = process.env.SEARCHER_PRIVATE_KEY;
 
-  if (!rpcUrl || !privateKey) {
-    throw new Error('Missing ETHEREUM_RPC_URL or SEARCHER_PRIVATE_KEY');
+  if (!rpcUrl) {
+    throw new Error('Missing ETHEREUM_RPC_URL');
   }
 
   const provider = new ethers.providers.JsonRpcProvider(rpcUrl);
-  const wallet = new ethers.Wallet(privateKey, provider);
   
-  console.log('💼 Deployer:', wallet.address);
+  // Load wallet from keystore (will prompt for password)
+  console.log('Loading wallet from keystore...');
+  const wallet = await loadWallet(provider);
+  console.log('Deployer:', wallet.address);
   
   // Get REAL gas prices from network
-  console.log('\n⛽ Fetching current gas prices from network...');
+  console.log('\nFetching current gas prices from network...');
   const feeData = await provider.getFeeData();
   
   // Get latest block to see actual base fee
   const latestBlock = await provider.getBlock('latest');
   const currentBaseFee = latestBlock.baseFeePerGas;
   
-  console.log('📊 Current Gas Situation:');
+  console.log('Current Gas Situation:');
   console.log(`   Base Fee: ${ethers.utils.formatUnits(currentBaseFee || 0, 'gwei')} gwei`);
   console.log(`   Suggested Max Fee: ${ethers.utils.formatUnits(feeData.maxFeePerGas || 0, 'gwei')} gwei`);
   console.log(`   Suggested Priority Fee: ${ethers.utils.formatUnits(feeData.maxPriorityFeePerGas || 0, 'gwei')} gwei`);
@@ -44,7 +47,7 @@ async function main() {
   const maxFeePerGas = feeData.maxFeePerGas!.mul(150).div(100);
   const maxPriorityFeePerGas = feeData.maxPriorityFeePerGas!.mul(150).div(100);
   
-  console.log('\n✅ We will use (with 50% safety buffer):');
+  console.log('\nWe will use (with 50% safety buffer):');
   console.log(`   Max Fee: ${ethers.utils.formatUnits(maxFeePerGas, 'gwei')} gwei`);
   console.log(`   Priority Fee: ${ethers.utils.formatUnits(maxPriorityFeePerGas, 'gwei')} gwei`);
   
@@ -70,18 +73,18 @@ async function main() {
     defaultUniswapV3Pool: process.env.DEFAULT_UNISWAP_V3_POOL || '0x5777d92f208679DB4b9778590Fa3CAB3aC9e2168',
   };
 
-  console.log('\n🔍 Quick validation...');
+  console.log('\nQuick validation...');
   const poolContract = new Contract(addresses.defaultUniswapV3Pool, POOL_ABI, provider);
   const token1Address = await poolContract.token1();
   const usdcIsToken1 = token1Address.toLowerCase() === addresses.usdc.toLowerCase();
-  console.log(`   ✅ USDC is token${usdcIsToken1 ? '1' : '0'}`);
+  console.log(`   USDC is token${usdcIsToken1 ? '1' : '0'}`);
 
   const usdcIndex = 0;
   const crvUsdIndexInUsdcPool = 1;
   const crvUsdIndexInVusdPool = 0;
   const vusdIndex = 1;
 
-  console.log('\n🚢 Deploying with PROPER gas pricing...');
+  console.log('\nDeploying with PROPER gas pricing...');
   
   const vusdArbitrageFactory = new VusdArbitrage__factory(wallet);
 
@@ -107,30 +110,27 @@ async function main() {
     }
   );
 
-  console.log(`\n📤 Transaction Broadcast!`);
+  console.log(`\nTransaction Broadcast!`);
   console.log(`   Hash: ${contract.deployTransaction.hash}`);
   console.log(`   Nonce: 0`);
   console.log(`   Max Fee: ${ethers.utils.formatUnits(maxFeePerGas, 'gwei')} gwei`);
   console.log(`   Priority Fee: ${ethers.utils.formatUnits(maxPriorityFeePerGas, 'gwei')} gwei`);
-  console.log(`\n   ⚡ This should go through IMMEDIATELY with proper gas!`);
-  console.log(`\n   📺 Watch on Etherscan: https://etherscan.io/tx/${contract.deployTransaction.hash}`);
+  console.log(`\n   This should go through IMMEDIATELY with proper gas!`);
+  console.log(`\n   Watch on Etherscan: https://etherscan.io/tx/${contract.deployTransaction.hash}`);
   
-  console.log('\n⏳ Waiting for confirmation (should be fast with proper gas)...');
+  console.log('\nWaiting for confirmation (should be fast with proper gas)...');
 
   try {
     const receipt = await contract.deployTransaction.wait(2);
     
-    console.log('\n🎉🎉🎉 SUCCESS! 🎉🎉🎉\n');
-    console.log('╔═══════════════════════════════════════════════════╗');
-    console.log('║                CONTRACT DEPLOYED!                 ║');
-    console.log('╠═══════════════════════════════════════════════════╣');
-    console.log(`║  ${receipt.contractAddress}  ║`);
-    console.log('╚═══════════════════════════════════════════════════╝');
+    console.log('\nSUCCESS\n');
+    console.log('CONTRACT DEPLOYED');
+    console.log(`${receipt.contractAddress}`);
     console.log('');
-    console.log(`🔗 Etherscan: https://etherscan.io/address/${receipt.contractAddress}`);
-    console.log(`📦 Block: ${receipt.blockNumber}`);
-    console.log(`⛽ Gas Used: ${receipt.gasUsed.toString()}`);
-    console.log(`💰 Actual Cost: ${ethers.utils.formatEther(receipt.gasUsed.mul(receipt.effectiveGasPrice))} ETH`);
+    console.log(`Etherscan: https://etherscan.io/address/${receipt.contractAddress}`);
+    console.log(`Block: ${receipt.blockNumber}`);
+    console.log(`Gas Used: ${receipt.gasUsed.toString()}`);
+    console.log(`Actual Cost: ${ethers.utils.formatEther(receipt.gasUsed.mul(receipt.effectiveGasPrice))} ETH`);
     
     // Save deployment
     const deploymentInfo = {
@@ -150,17 +150,17 @@ async function main() {
       JSON.stringify(deploymentInfo, null, 2)
     );
     
-    console.log('\n✅ Deployment info saved to deployments/VusdArbitrage-1.json');
-    console.log('\n🎊 ALL DONE! Contract is live on mainnet!');
+    console.log('\nDeployment info saved to deployments/VusdArbitrage-1.json');
+    console.log('\nALL DONE! Contract is live on mainnet!');
     
   } catch (error: any) {
-    console.error('\n⏰ Wait timed out, but transaction might still be processing...');
+    console.error('\nWait timed out, but transaction might still be processing...');
     console.log('Check status at: https://etherscan.io/tx/' + contract.deployTransaction.hash);
     console.log('Expected contract address: 0xcD04f54022822b6f7099308B4b9Ab96D1f1c05F5');
   }
 }
 
 main().catch((error) => {
-  console.error('\n💥 Error:', error.message);
+  console.error('\nError:', error.message);
   process.exitCode = 1;
 });

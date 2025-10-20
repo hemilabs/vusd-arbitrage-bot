@@ -21,19 +21,28 @@ const config: HardhatUserConfig = {
     hardhat: {
       forking: {
         url: process.env.ETHEREUM_RPC_URL || "",
-        // PINNED TO SPECIFIC BLOCK - matches Tenderly fork
-        // Block 23592043 - FRESH BLOCK (October 16, 2025)
-        blockNumber: 23592043,
+        // PINNED TO SPECIFIC BLOCK - October 17, 2025
+        // Block 23599652 - FRESH BLOCK for accurate Chainlink oracle prices
+        // IMPORTANT: Chainlink oracles become stale quickly (within hours)
+        // Update this block number if oracle-related tests fail
+        blockNumber: 23599652,
       },
     },
-    // UPDATED TENDERLY FORK - FRESH BLOCK (no stale oracle prices)
+    // TENDERLY FORK - Uses TENDERLY_RPC_URL from .env
+    // IMPORTANT: Create fresh Tenderly forks regularly to avoid stale Chainlink oracle prices
+    // Chainlink price feeds update frequently and old forks will have outdated prices
+    // To create new fork: Use Tenderly dashboard, fork at latest block, update TENDERLY_RPC_URL in .env
     tenderly: {
-      url: "https://virtual.mainnet.eu.rpc.tenderly.co/9def9c05-33cb-4003-9278-d5dd47513dc6",
-      accounts: process.env.SEARCHER_PRIVATE_KEY ? [process.env.SEARCHER_PRIVATE_KEY] : [],
+      url: process.env.TENDERLY_RPC_URL || "",
+      // Scripts load their own signers from keystore using src/utils/keystore-utils.ts
+      // No accounts needed in hardhat config for security reasons
+      accounts: [],
     },
     mainnet: {
       url: process.env.ETHEREUM_RPC_URL || "",
-      accounts: process.env.SEARCHER_PRIVATE_KEY ? [process.env.SEARCHER_PRIVATE_KEY] : [],
+      // Scripts load their own signers from keystore using src/utils/keystore-utils.ts
+      // No accounts needed in hardhat config for security reasons
+      accounts: [],
       gas: 5000000,
     },
   },

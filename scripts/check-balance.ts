@@ -1,77 +1,68 @@
 // scripts/check-balance.ts
-// Quick script to check wallet balance on any network
+// Check wallet balance on different networks
+// Now uses encrypted keystore instead of plaintext private key
 
 import { ethers } from 'ethers';
 import * as dotenv from 'dotenv';
+import { loadWallet } from '../src/utils/keystore-utils';
 
 dotenv.config();
 
 async function main() {
-  console.log('🔍 Checking Wallet Balance...\n');
+  const args = process.argv.slice(2);
+  const network = args[0] || 'mainnet';
 
-  // Get network from command line or default to tenderly
-  const network = process.argv[2] || 'tenderly';
-  
-  // Get RPC URL based on network
+  console.log(`Checking balance on ${network}...\n`);
+
   let rpcUrl: string;
+  let networkName: string;
+
   if (network === 'tenderly') {
-    rpcUrl = 'https://virtual.mainnet.eu.rpc.tenderly.co/8d322a00-ec8f-4c00-8734-d9bb730566e0';
+    rpcUrl = process.env.TENDERLY_RPC_URL || '';
+    if (!rpcUrl) {
+      throw new Error('TENDERLY_RPC_URL not set in .env file');
+    }
+    networkName = 'Tenderly Fork';
   } else if (network === 'mainnet') {
     rpcUrl = process.env.ETHEREUM_RPC_URL || '';
+    if (!rpcUrl) {
+      throw new Error('ETHEREUM_RPC_URL not set in .env file');
+    }
+    networkName = 'Ethereum Mainnet';
   } else {
-    throw new Error(`Unknown network: ${network}`);
+    throw new Error(`Unknown network: ${network}. Use 'mainnet' or 'tenderly'`);
   }
 
-  console.log(`🌐 Network: ${network}`);
-  console.log(`📡 RPC: ${rpcUrl.substring(0, 50)}...`);
-
+  // Create provider
   const provider = new ethers.providers.JsonRpcProvider(rpcUrl);
-  const privateKey = process.env.SEARCHER_PRIVATE_KEY;
-  
-  if (!privateKey) {
-    throw new Error('Missing SEARCHER_PRIVATE_KEY');
-  }
 
-  const wallet = new ethers.Wallet(privateKey, provider);
-  
-  console.log(`\n💼 Address: ${wallet.address}`);
-  
+  // Load wallet from keystore (will prompt for password)
+  console.log('Loading wallet from keystore...');
+  const wallet = await loadWallet(provider);
+
+  console.log(`Network: ${networkName}`);
+  console.log(`Wallet: ${wallet.address}\n`);
+
+  // Get balance
   const balance = await wallet.getBalance();
   const balanceEth = ethers.utils.formatEther(balance);
-  
-  console.log(`💰 Balance: ${balanceEth} ETH`);
-  
+
+  console.log(`Balance: ${balanceEth} ETH`);
+
   // Get network info
   const networkInfo = await provider.getNetwork();
-  console.log(`\n📊 Network Info:`);
-  console.log(`   Chain ID: ${networkInfo.chainId}`);
-  console.log(`   Name: ${networkInfo.name || 'unknown'}`);
-  
-  // Check nonce
-  const nonce = await wallet.getTransactionCount();
-  console.log(`\n🔢 Transaction Count: ${nonce}`);
-  
-  // Get gas price
-  const gasPrice = await provider.getGasPrice();
-  const gasPriceGwei = parseFloat(ethers.utils.formatUnits(gasPrice, 'gwei'));
-  console.log(`⛽ Current Gas Price: ${gasPriceGwei.toFixed(3)} gwei`);
-  
-  // Estimate deployment cost
-  const estimatedGas = 5000000;
-  const maxCost = gasPrice.mul(2).mul(estimatedGas); // 2x gas price for buffer
-  const maxCostEth = ethers.utils.formatEther(maxCost);
-  console.log(`\n💸 Estimated Max Deployment Cost: ${maxCostEth} ETH`);
-  
-  if (balance.gt(maxCost)) {
-    console.log('✅ Sufficient balance for deployment!');
-  } else {
-    console.log('❌ Insufficient balance for deployment');
-  }
+  console.log(`Chain ID: ${networkInfo.chainId}`);
+
+  // Get block number
+  const blockNumber = await provider.getBlockNumber();
+  console.log(`Block: ${blockNumber}`);
+
+  console.log('\nBalance check complete!');
 }
 
 main()
   .then(() => process.exit(0))
   .catch((error) => {
-    console.error('❌ Error:', error.message);
+    console.error('\nError:', error.message);
     process.exit(1);
   });

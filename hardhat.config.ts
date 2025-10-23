@@ -21,11 +21,11 @@ const config: HardhatUserConfig = {
     hardhat: {
       forking: {
         url: process.env.ETHEREUM_RPC_URL || "",
-        // PINNED TO SPECIFIC BLOCK - October 17, 2025
-        // Block 23599652 - FRESH BLOCK for accurate Chainlink oracle prices
+        // PINNED TO SPECIFIC BLOCK - October 22, 2025
+        // Block 23628841 - FRESH BLOCK for accurate Chainlink oracle prices
         // IMPORTANT: Chainlink oracles become stale quickly (within hours)
         // Update this block number if oracle-related tests fail
-        blockNumber: 23599652,
+        blockNumber: 23633933,
       },
     },
     // TENDERLY FORK - Uses TENDERLY_RPC_URL from .env

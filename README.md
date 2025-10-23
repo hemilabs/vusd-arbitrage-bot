@@ -1,104 +1,60 @@
 # VUSD Arbitrage Bot
 
-Automated arbitrage system for exploiting price deviations between VUSD and crvUSD on Ethereum mainnet using Uniswap V3 flashloans.
+Automated Flashbots arbitrage system exploiting price discrepancies between VUSD and crvUSD on Ethereum mainnet using Uniswap V3 flashloans.
 
-## Current Status: Tested and Working
+## Current Status: Production Ready
 
-**Version:** 1.0.0 - Tested on Hardhat and Tenderly Forks
+**Version:** 2.0.0 - Mainnet Deployed and Validated
 
-The arbitrage contract has been successfully tested on both local Hardhat fork and Tenderly fork at block 23592043 (October 16, 2025). Both RICH and CHEAP arbitrage paths execute successfully with expected fee losses.
+**Contract Address:** [`0x7ea3df7c51815EF99BfEf5d2122C62e9D6308a22`](https://etherscan.io/address/0x7ea3df7c51815EF99BfEf5d2122C62e9D6308a22)
 
-**Test Results:**
-- RICH scenario: -1.74 USDC loss (expected fees and slippage)
-- CHEAP scenario: -0.32 USDC loss (expected fees and slippage)
-- Average gas usage: 474,095 gas per execution
-- Block tested: 23592043
+**Validation Transaction:** [`0x6b49307bb3ead03a8732da5f4c43ec300aaafb5cc5f88ec67701ac44246ba1bf`](https://etherscan.io/tx/0x6b49307bb3ead03a8732da5f4c43ec300aaafb5cc5f88ec67701ac44246ba1bf)
 
-**Next Steps:**
-1. Implement keystore security for private key management
-2. Deploy to Ethereum mainnet
-3. Set up monitoring and automated execution
-
-See [PROJECT_SUMMARY.md](./PROJECT_SUMMARY.md) for complete project status and technical details.
+**Key Features:**
+- Secure smart contract with 5-layer protection (callback verification, slippage protection, reentrancy guards, access control, emergency withdrawal)
+- Automated monitoring checks every 15 seconds for opportunities
+- 1000 USDC flashloan amount per execution
+- Flashbots integration for MEV protection
+- Encrypted keystore security (no plaintext private keys)
+- ~450,000 gas per execution
 
 ---
 
-## Project Overview
+## Arbitrage Strategy
 
-### Arbitrage Strategy
-
-The bot executes two arbitrage scenarios based on price relationships:
-
-**RICH Path** (when crvUSD trades above VUSD):
+**RICH Path** (when crvUSD > VUSD price):
 ```
-1. Flashloan USDC from Uniswap V3
-2. Swap USDC -> crvUSD (Curve)
-3. Swap crvUSD -> VUSD (Curve)
-4. Redeem VUSD -> USDC (VUSD Protocol)
-5. Repay flashloan + fee
+1. Flashloan 1000 USDC from Uniswap V3
+2. Swap USDC → crvUSD (Curve)
+3. Swap crvUSD → VUSD (Curve)
+4. Redeem VUSD → USDC (VUSD Protocol)
+5. Repay flashloan + 0.01% fee
+6. Keep profit
 ```
 
-**CHEAP Path** (when crvUSD trades below VUSD):
+**CHEAP Path** (when crvUSD < VUSD price):
 ```
-1. Flashloan USDC from Uniswap V3
-2. Mint USDC -> VUSD (VUSD Protocol)
-3. Swap VUSD -> crvUSD (Curve)
-4. Swap crvUSD -> USDC (Curve)
-5. Repay flashloan + fee
+1. Flashloan 1000 USDC from Uniswap V3
+2. Mint USDC → VUSD (VUSD Protocol)
+3. Swap VUSD → crvUSD (Curve)
+4. Swap crvUSD → USDC (Curve)
+5. Repay flashloan + 0.01% fee
+6. Keep profit
 ```
-
-### Architecture
-
-**Smart Contract (On-Chain):**
-- VusdArbitrage.sol - Production-ready arbitrage execution contract
-- Implements Uniswap V3 flashloan callback interface
-- Dynamic pool selection with auto-detection of token positions
-- Built-in reentrancy protection (ReentrancyGuard)
-- Owner-only execution controls
-- Emergency withdrawal functionality
-- Comprehensive event logging for monitoring
-
-**Off-Chain Components (Future):**
-- Price monitoring for arbitrage opportunity detection
-- Profitability simulation accounting for all fees
-- Automated execution system
-- MEV protection via Flashbots
 
 ---
 
 ## Installation
 
-### Prerequisites
-
-- Node.js v16 or higher
-- Yarn package manager
-- Ethereum RPC endpoint (Alchemy, Infura, or similar)
-- Tenderly account (for testing on mainnet fork)
-
-### Setup
-
 ```bash
-# Clone repository
-git clone <repository-url>
+# Clone and install
+git clone https://github.com/mitakash/vusd-arbitrage-bot.git
 cd vusd-arbitrage-bot
-
-# Install dependencies
 yarn install
 
-# Copy environment template
+# Configure environment
 cp env-example.txt .env
-
-# Configure .env with your credentials
-# ETHEREUM_RPC_URL - Your Ethereum RPC endpoint
-# SEARCHER_PRIVATE_KEY - Private key for deployments (will migrate to keystore)
-# Other addresses are pre-configured for mainnet
-```
-
-### Compile Contracts
-
-```bash
-# Clean previous builds
-yarn hardhat clean
+# Edit .env with your settings
 
 # Compile contracts
 yarn hardhat compile
@@ -106,389 +62,313 @@ yarn hardhat compile
 
 ---
 
-## Project Structure
+## Configuration
 
+### Required Environment Variables
+
+```bash
+# RPC Endpoint (Required)
+ETHEREUM_RPC_URL=https://eth-mainnet.g.alchemy.com/v2/YOUR_API_KEY
+
+# Deployed Contract (Required for bot)
+VUSD_ARBITRAGE_CONTRACT=0x7ea3df7c51815EF99BfEf5d2122C62e9D6308a22
+
+# Keystore Path (Required - encrypted private key)
+KEYSTORE_PATH=/full/path/to/keystore/searcher.json
+
+# Flashbots Auth Key (Required - separate key for bundle signing)
+FLASHBOTS_AUTH_KEY=0x...your_flashbots_key...
+
+# All other addresses are pre-configured for mainnet
 ```
-contracts/
-  VusdArbitrageBot.sol          # Main arbitrage contract (production version)
 
-scripts/
-  deploy-tenderly.ts            # Deploy to Tenderly fork with proper gas settings
-  test-deployed-contract.ts     # Test deployed contract on Tenderly
-  test-local-hardhat.ts         # Test on local Hardhat fork with whale funding
-  check-balance.ts              # Check wallet balance on any network
-  test-env.ts                   # Validate environment configuration
-  deploy-vusd-arbitrage-robust.ts  # Mainnet deployment script
-  deploy-with-proper-gas.ts     # Deploy with current gas prices
-  replace-stuck-deployment.ts   # Replace stuck deployment transactions
-  fund-tenderly-simple.sh       # Fund Tenderly wallet with ETH
+### Keystore Setup
 
-src/
-  profit-simulator.ts           # Off-chain profitability calculations
-  oracle-price-fetcher.ts       # Chainlink oracle interface
-  curve-quote-provider.ts       # Curve pool price quotes
-  price-monitor.ts              # Price deviation monitoring
-  arbitrage-executor.ts         # Automated execution logic
-  dex-providers/                # DEX integration modules
-  utils/                        # Shared utilities and configuration
-  types/                        # TypeScript type definitions
+Create encrypted keystore (never use plaintext private keys):
 
-test/
-  test-all-flashloan-scenarios.ts  # Comprehensive scenario tests
+```bash
+# Create keystore file
+yarn ts-node scripts/create-keystore.ts
+# Prompts for: private key, password, output path
 
-backups/
-  VusdArbitrageBot-Debug.sol    # Debug version with console.log statements
+# Test keystore
+yarn ts-node scripts/test-keystore.ts
 ```
 
 ---
 
 ## Testing
 
-### Local Hardhat Fork Testing
+### Important: Oracle Freshness Requirement
 
-Test on a local mainnet fork with impersonated whale accounts:
+**⚠️ CRITICAL:** Chainlink oracles must have updated within the last 24 hours or tests will fail. For fork testing (Hardhat/Tenderly), always use a block height from within the last 24 hours.
 
-```bash
-# Test both RICH and CHEAP scenarios
-yarn hardhat run scripts/test-local-hardhat.ts --network hardhat
-```
-
-**Expected Output:**
-- Contract deployment successful
-- Whale funding: 10,000 USDC transferred to contract
-- RICH scenario: Executes with small loss (fees)
-- CHEAP scenario: Executes with small loss (fees)
-- Detailed console output showing each step
-
-### Tenderly Fork Testing
-
-Test on a Tenderly virtual testnet (mainnet fork):
-
-**Step 1: Create Tenderly Fork**
-1. Go to https://dashboard.tenderly.co
-2. Create new Virtual TestNet from latest mainnet block
-3. Copy RPC URL
-
-**Step 2: Update Configuration**
 ```typescript
-// hardhat.config.ts - Update tenderly network URL
-tenderly: {
-  url: "https://virtual.mainnet.eu.rpc.tenderly.co/YOUR_FORK_ID",
-  accounts: [process.env.SEARCHER_PRIVATE_KEY]
+// hardhat.config.ts
+hardhat: {
+  forking: {
+    url: process.env.ETHEREUM_RPC_URL,
+    blockNumber: 23633933,  // ⚠️ UPDATE THIS to recent block (within 24h)
+  }
 }
 ```
 
-**Step 3: Fund Test Wallet**
+### Local Hardhat Fork Testing
+
 ```bash
-# Fund with 100 ETH for testing
+# Test both RICH and CHEAP scenarios
+yarn hardhat run scripts/execute-arbitrage-hardhat-test.ts --network hardhat
+```
+
+### Tenderly Fork Testing
+
+```bash
+# 1. Create fresh fork at https://dashboard.tenderly.co (use LATEST block)
+# 2. Update TENDERLY_RPC_URL in .env
+# 3. Fund wallet
 ./scripts/fund-tenderly-simple.sh
-```
 
-**Step 4: Deploy Contract**
-```bash
+# 4. Deploy and test
 yarn hardhat run scripts/deploy-tenderly.ts --network tenderly
-```
-
-**Step 5: Test Deployed Contract**
-```bash
 yarn hardhat run scripts/test-deployed-contract.ts --network tenderly
 ```
 
-**Expected Results:**
-- Deployment successful with contract address
-- USDC purchased via Uniswap for testing
-- RICH scenario executes successfully
-- CHEAP scenario executes successfully
-- Events emitted for all steps
-- Gas usage approximately 474k per scenario
+**Note:** Create fresh Tenderly forks every 2-4 hours to avoid stale oracle data.
 
 ---
 
-## Deployment
+## Production Usage
 
-### Deploy to Tenderly (Testing)
+### Running the Live Bot
 
 ```bash
-# Deploy contract
-yarn hardhat run scripts/deploy-tenderly.ts --network tenderly
+# Start production bot
+yarn ts-node scripts/execute-arbitrage-LIVE.ts
 
-# Test the deployed contract
-yarn hardhat run scripts/test-deployed-contract.ts --network tenderly
+# Bot behavior:
+# - Checks for opportunities every 15 seconds
+# - Uses 1000 USDC flashloan amount
+# - Only executes if profit > $2.00 after all fees
+# - Submits via Flashbots for MEV protection
 ```
 
-### Deploy to Mainnet (Production)
+### What the Bot Does
 
-**Requirements:**
-- Minimum 0.01 ETH in deployer wallet for gas
-- Keystore security implemented (recommended)
-- Contract verified on Etherscan (optional but recommended)
+1. **Every 15 seconds:**
+   - Queries Curve pools for exchange rates
+   - Queries Chainlink oracle for VUSD redemption price
+   - Queries VUSD protocol for mint/redeem fees
+   
+2. **Simulates both paths:**
+   - Calculates expected outputs for RICH and CHEAP paths
+   - Accounts for all fees (flashloan 0.01%, Curve swaps 0.04% each, VUSD fees ~0.036%, gas costs)
+   - Determines net profitability
 
-```bash
-# Check wallet balance and gas prices
-yarn hardhat run scripts/check-balance.ts mainnet
+3. **If profitable (> $2.00):**
+   - Calculates slippage protection (5 basis points default)
+   - Creates transaction with minimum output requirements
+   - Submits Flashbots bundle to relay
+   - Monitors for inclusion
 
-# Validate environment configuration
-yarn hardhat run scripts/test-env.ts
-
-# Deploy with robust error handling
-yarn hardhat run scripts/deploy-vusd-arbitrage-robust.ts --network mainnet
-```
+4. **Logs all activity:**
+   - Opportunity checks
+   - Profit calculations
+   - Execution attempts
+   - Transaction results
 
 ---
 
-## Key Contracts and Addresses
+## Key Scripts Reference
 
-All mainnet addresses configured in `.env`:
+### Production Scripts
 
-| Contract | Address | Notes |
-|----------|---------|-------|
-| USDC | 0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48 | 6 decimals |
-| crvUSD | 0xf939E0A03FB07F59A73314E73794Be0E57ac1b4E | 18 decimals |
-| VUSD | 0x677ddbd918637E5F2c79e164D402454dE7dA8619 | 18 decimals |
-| VUSD Minter | 0x3C8aeF08d90C2418f8AE887af47ba7d8Db88AF6b | Mint fee: ~0.036% |
-| VUSD Redeemer | 0x43c704BC0F773B529E871EAAF4E283C2233512F9 | Redeem fee: ~0.036% |
-| Curve crvUSD/USDC | 0x4DEcE678ceceb27446b35C672dC7d61F30bAD69E | StableSwap NG |
-| Curve crvUSD/VUSD | 0xB1c189dfDe178FE9F90E72727837cC9289fB944F | StableSwap NG |
-| Uniswap V3 USDC/DAI | 0x5777d92f208679DB4b9778590Fa3CAB3aC9e2168 | 0.01% fee (default) |
+| Script | Purpose |
+|--------|---------|
+| `execute-arbitrage-LIVE.ts` | Main production bot (15s interval, 1000 USDC flashloan) |
+| `deploy-vusd-arbitrage-robust.ts` | Deploy contract to mainnet with robust error handling |
+
+### Testing Scripts
+
+| Script | Purpose |
+|--------|---------|
+| `execute-arbitrage-hardhat-test.ts` | Test on local fork (requires recent block within 24h) |
+| `test-deployed-contract.ts` | Test deployed contract on Tenderly |
+| `execute-arbitrage-mainnet-public-test.ts` | Validate on-chain logic with public transaction |
+| `execute-arbitrage-mainnet-funded-test.ts` | Test via Flashbots (may not be included if not profitable) |
+| `test-deployed-mainnet-contract.ts` | Sanity check (designed to revert for validation) |
+
+### Utility Scripts
+
+| Script | Purpose |
+|--------|---------|
+| `calculate-min-flashbots-priority-fee.ts` | Analyze blocks and recommend gas fees |
+| `diagnose-arbitrage.ts` | Debug profitability calculations |
+| `create-keystore.ts` | Create encrypted keystore file |
+| `test-keystore.ts` | Verify keystore functionality |
+| `check-balance.ts` | Check wallet/contract balance |
+| `test-env.ts` | Validate environment configuration |
 
 ---
 
-## Technical Details
+## Smart Contract Architecture
 
-### Contract Features
+### Security Layers
 
-**Dynamic Pool Selection:**
-- Supports any Uniswap V3 pool with USDC
-- Auto-detects USDC position (token0 or token1)
-- Default pool: USDC/DAI 0.01% (31M liquidity, lowest fees)
-- Can override with custom pool for larger trades
+**1. Callback Protection:**
+```solidity
+address private s_activePool;  // Only the initiated pool can callback
 
-**Security Features:**
-- ReentrancyGuard protection on callback
-- Owner-only execution functions
-- Validates flashloan caller is expected pool
-- Custom error types for gas-efficient reverts
-- Emergency withdrawal for stuck funds
+function executeRich(...) external onlyOwner {
+    s_activePool = poolAddress;  // Set before flashloan
+    pool.flash(...);
+    s_activePool = address(0);   // Clear after
+}
 
-**Event Logging:**
-- FlashloanReceived: Track flashloan execution
-- SwapExecuted: Monitor each swap step
-- MintExecuted/RedeemExecuted: VUSD protocol interactions
-- BeforeRepayment/RepaymentExecuted: Flashloan repayment
-- ArbitrageComplete: Final profit/loss calculation
+function uniswapV3FlashCallback(...) external {
+    if (msg.sender != s_activePool) revert UnauthorizedCallback();
+    // Prevents malicious pools from calling callback
+}
+```
+
+**2. Slippage Protection:**
+```solidity
+struct RichParams {
+    uint256 minCrvUsdOut;  // Minimum from each swap
+    uint256 minVusdOut;
+    uint256 minUsdcOut;
+}
+
+// Off-chain bot calculates these, on-chain contract enforces them
+```
+
+**3. Reentrancy Protection:** OpenZeppelin ReentrancyGuard on callback
+
+**4. Access Control:** Owner-only execution functions
+
+**5. Emergency Controls:** Owner can withdraw stuck funds
 
 ### Gas Optimization
 
-The contract uses:
 - Immutable variables for addresses (save SLOAD gas)
 - Custom errors instead of revert strings
-- Single approval in constructor (save gas per trade)
-- Solidity 0.8.28 with IR-based compiler optimization
-- Optimized for 200 runs
-
-**Gas Estimates (Block 23592043):**
-- RICH path: 474,095 gas
-- CHEAP path: 474,044 gas
-- Deployment: Approximately 2M gas
-
-### Fee Structure
-
-**Transaction Fees:**
-- Uniswap V3 flashloan: 0.01% of borrowed amount
-- Curve swaps: 0.04% per swap (2 swaps per path)
-- VUSD mint: Approximately 0.036% + oracle impact
-- VUSD redeem: Approximately 0.036% + oracle impact
-
-**Total Expected Fees:**
-- RICH path: Approximately 1.5-2 USDC per 1000 USDC flashloan
-- CHEAP path: Approximately 0.3-0.5 USDC per 1000 USDC flashloan
-
-### Curve Pool Configuration
-
-**crvUSD/USDC Pool:**
-- Index 0: USDC (0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48)
-- Index 1: crvUSD (0xf939E0A03FB07F59A73314E73794Be0E57ac1b4E)
-
-**crvUSD/VUSD Pool:**
-- Index 0: crvUSD (0xf939E0A03FB07F59A73314E73794Be0E57ac1b4E)
-- Index 1: VUSD (0x677ddbd918637E5F2c79e164D402454dE7dA8619)
-
-Indices are automatically validated during deployment.
+- Single approval in constructor
+- Solidity 0.8.28 with IR optimization
+- Result: ~450,000 gas per execution
 
 ---
 
-## Usage Examples
+## Key Contract Addresses
 
-### Execute RICH Arbitrage
-
-```solidity
-// From owner wallet
-contract.executeRichWithDefaultPool(1000 * 10**6); // 1000 USDC flashloan
 ```
+Deployed Contract:
+└── VusdArbitrageBot: 0x7ea3df7c51815EF99BfEf5d2122C62e9D6308a22
 
-### Execute CHEAP Arbitrage
-
-```solidity
-// From owner wallet
-contract.executeCheapWithDefaultPool(1000 * 10**6); // 1000 USDC flashloan
-```
-
-### Use Custom Uniswap V3 Pool
-
-```solidity
-// For larger trades, use pool with more liquidity
-address customPool = 0x...; // USDC/WETH 0.05% pool
-uint256 amount = 10000 * 10**6; // 10k USDC
-contract.executeRich(customPool, amount);
-```
-
-### Emergency Withdrawal
-
-```solidity
-// Withdraw stuck tokens (owner only)
-contract.emergencyWithdraw(USDC_ADDRESS);
-```
-
----
-
-## Development
-
-### Type Checking
-
-```bash
-npx tsc --noEmit
-```
-
-### Generate TypeChain Types
-
-```bash
-yarn hardhat compile
-# Types generated in typechain-types/
-```
-
-### Run Specific Test
-
-```bash
-yarn hardhat run scripts/test-local-hardhat.ts --network hardhat
+Protocol Addresses (all mainnet):
+├── USDC: 0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48
+├── crvUSD: 0xf939E0A03FB07F59A73314E73794Be0E57ac1b4E
+├── VUSD: 0x677ddbd918637E5F2c79e164D402454dE7dA8619
+├── VUSD Minter: 0x3C8aeF08d90C2418f8AE887af47ba7d8Db88AF6b
+├── VUSD Redeemer: 0x43c704BC0F773B529E871EAAF4E283C2233512F9
+├── Curve crvUSD/USDC: 0x4DEcE678ceceb27446b35C672dC7d61F30bAD69E
+├── Curve crvUSD/VUSD: 0xB1c189dfDe178FE9F90E72727837cC9289fB944F
+└── Uniswap V3 USDC/DAI (0.01%): 0x5777d92f208679DB4b9778590Fa3CAB3aC9e2168
 ```
 
 ---
 
 ## Troubleshooting
 
-### Transaction Reverts
+### Common Issues
 
-**Check gas limit:**
-```javascript
-// Increase gas limit if needed
-{ gasLimit: 5000000 }
-```
-
-**Check wallet balance:**
+**"Insufficient balance" error:**
 ```bash
-yarn hardhat run scripts/check-balance.ts tenderly
+yarn ts-node scripts/check-balance.ts mainnet
+# Ensure you have ETH for gas (at least 0.01 ETH)
 ```
 
-**Check contract has USDC:**
+**"Keystore decryption failed":**
 ```bash
-# Contract needs initial USDC for testing
-# Either transfer manually or use test script whale funding
+# Verify keystore file exists and test with correct password
+yarn ts-node scripts/test-keystore.ts
 ```
 
-### Insufficient Liquidity
+**"Bundle not included" (Flashbots):**
+This is normal if the trade is not profitable enough. Flashbots builders only include bundles with sufficient MEV or priority fees to justify the gas usage.
 
-If flashloan amount is too large for default pool:
-- Use USDC/WETH 0.05% or 0.3% pool (more liquidity)
-- Reduce flashloan amount
-- Check pool reserves on Uniswap analytics
+**"Oracle price stale" error:**
+- For Tenderly: Create fresh fork at latest block
+- For Hardhat: Update `blockNumber` in `hardhat.config.ts` to recent block (within last 24 hours)
 
-### Environment Issues
-
+**Transaction reverts on mainnet:**
 ```bash
-# Validate all environment variables
-yarn hardhat run scripts/test-env.ts
+# Run diagnostics to check profitability calculations
+yarn ts-node scripts/diagnose-arbitrage.ts
 ```
 
 ---
 
-## Security Considerations
+## Fee Structure & Performance
 
-**Private Key Management:**
-- Never commit .env file to version control
-- Use separate keys for testing vs. production
-- Implement keystore encryption (planned next step)
-- Consider hardware wallet for mainnet deployment
+**Per 1000 USDC Flashloan:**
+- Flashloan fee: 0.01% = $0.10
+- Curve swaps: 0.04% each × 2 = $0.80
+- VUSD mint/redeem: ~0.036% each = ~$0.72
+- Gas cost: $3-10 (depends on gas price)
+- **Total costs: ~$4.62-11.62 per execution**
 
-**Smart Contract Security:**
-- Owner-only execution prevents unauthorized access
-- ReentrancyGuard protects against reentrancy attacks
-- Validates flashloan caller to prevent malicious pools
-- Emergency withdrawal for recovery of stuck funds
-- Extensive testing on forks before mainnet deployment
+**Bot only executes if net profit > $2.00 after all fees.**
 
-**Operational Security:**
-- Monitor contract balance regularly
-- Set up alerts for unusual transactions
-- Use Flashbots for MEV protection (planned)
-- Regular audits of profitable opportunities
+**Validation Test Results** (Block 23635877):
+- Scenario: RICH path with 1000 USDC
+- Simulated P/L: -$1.28 USDC
+- Actual P/L: -$1.26 USDC
+- Simulation accuracy: 98.4%
+- Gas used: 447,892 (vs predicted 450,000)
+- Status: ✅ SUCCESS
 
----
-
-## Roadmap
-
-### Phase 1: Security Implementation (Current)
-- Implement keystore-based private key management
-- Remove plaintext private keys from environment
-- Test keystore integration with all scripts
-
-### Phase 2: Mainnet Deployment
-- Deploy contract to Ethereum mainnet
-- Verify contract on Etherscan
-- Fund contract with initial capital
-- Execute test transactions with small amounts
-
-### Phase 3: Automation
-- Implement automated price monitoring
-- Build profit calculation system
-- Set up automated execution via Flashbots
-- Deploy monitoring and alerting infrastructure
-
-### Phase 4: Optimization
-- Gas optimization based on mainnet data
-- MEV protection strategies
-- Multi-pool routing for better execution
-- Dynamic flashloan sizing based on liquidity
+**Production Configuration:**
+- Check interval: 15 seconds (240 checks/hour)
+- Flashloan amount: 1000 USDC per execution
+- Minimum profit threshold: $2.00 net after all fees
+- Expected opportunities: Variable, 2-10 per day typical
 
 ---
 
-## License
+## Security Best Practices
 
-MIT License - See LICENSE file for details
-
----
-
-## Acknowledgments
-
-This project demonstrates:
-- Production-ready Uniswap V3 flashloan integration
-- Multi-protocol arbitrage execution (Curve, VUSD, Uniswap)
-- Comprehensive testing methodology on Hardhat and Tenderly forks
-- Professional smart contract development practices
-- Gas-optimized Solidity patterns
-
-Built with focus on security, testing, and production readiness.
+1. **Never commit `.env` file** - contains sensitive configuration
+2. **Use encrypted keystores** - never plaintext private keys in code or environment variables
+3. **Separate Flashbots key** - use different key from execution wallet
+4. **Monitor contract balance** - withdraw profits regularly
+5. **Start with small amounts** - use 1000 USDC flashloan initially
+6. **Review logs regularly** - check for unusual activity
+7. **Use Flashbots in production** - prevents front-running and MEV attacks
 
 ---
 
-## Support
+## Project Structure
 
-For issues, questions, or contributions:
-- Create an issue in the repository
-- Review PROJECT_SUMMARY.md for technical details
-- Check troubleshooting section for common problems
+```
+├── contracts/
+│   └── VusdArbitrageBot.sol          # Production contract (hardened v2.0)
+├── scripts/
+│   ├── execute-arbitrage-LIVE.ts     # Main production bot
+│   ├── deploy-vusd-arbitrage-robust.ts
+│   ├── execute-arbitrage-hardhat-test.ts
+│   ├── test-deployed-contract.ts
+│   └── ... (other testing/utility scripts)
+├── src/utils/
+│   ├── keystore-utils.ts             # Secure key management
+│   ├── logger.ts                     # Logging utilities
+│   └── config.ts                     # Configuration
+├── keystore/                         # Encrypted keystores (not committed)
+├── typechain-types/                  # Generated contract types
+└── logs/                             # Bot execution logs
+```
 
 ---
 
-**Status:** Ready for keystore security implementation and mainnet deployment
-**Last Updated:** October 2025
-**Tested Block:** 23592043
+**Status:** Production Ready - Validated on Mainnet  
+**Last Updated:** October 2025  
+**Contract:** [0x7ea3df7c51815EF99BfEf5d2122C62e9D6308a22](https://etherscan.io/address/0x7ea3df7c51815EF99BfEf5d2122C62e9D6308a22)  
+**License:** MIT

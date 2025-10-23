@@ -371,4 +371,6 @@ yarn ts-node scripts/diagnose-arbitrage.ts
 **Status:** Production Ready - Validated on Mainnet  
 **Last Updated:** October 2025  
 **Contract:** [0x7ea3df7c51815EF99BfEf5d2122C62e9D6308a22](https://etherscan.io/address/0x7ea3df7c51815EF99BfEf5d2122C62e9D6308a22)  
-**License:** MIT
+**License:** 
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.

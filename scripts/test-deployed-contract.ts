@@ -1,7 +1,6 @@
 // scripts/test-deployed-contract.ts
-// Test the deployed VusdArbitrage contract on Tenderly fork
-// Uses Uniswap to buy USDC instead of impersonating whales (Tenderly-compatible)
-// Uses keystore for secure wallet management
+// UPDATED to work with the new hardened VusdArbitrage contract
+// Tests the deployed contract on Tenderly fork by passing the required params structs.
 
 import { ethers } from 'hardhat';
 import * as dotenv from 'dotenv';
@@ -9,283 +8,178 @@ import { loadWallet } from '../src/utils/keystore-utils';
 
 dotenv.config();
 
-// ABIs
+// --- ABIs ---
 const ERC20_ABI = [
   'function balanceOf(address account) external view returns (uint256)',
   'function transfer(address to, uint256 amount) external returns (bool)',
   'function approve(address spender, uint256 amount) external returns (bool)',
-  'function decimals() external view returns (uint8)',
-  'function symbol() external view returns (string)',
-];
-
-const UNISWAP_ROUTER_ABI = [
-  'function exactInputSingle((address tokenIn, address tokenOut, uint24 fee, address recipient, uint256 deadline, uint256 amountIn, uint256 amountOutMinimum, uint160 sqrtPriceLimitX96)) external payable returns (uint256 amountOut)',
 ];
 
 const WETH_ABI = [
-  'function deposit() external payable',
-  'function approve(address spender, uint256 amount) external returns (bool)',
+    'function deposit() external payable',
+    'function approve(address spender, uint256 amount) external returns (bool)',
 ];
 
-// Addresses
-const DEPLOYED_CONTRACT = '0xcD04f54022822b6f7099308B4b9Ab96D1f1c05F5';
+const UNISWAP_ROUTER_ABI = [
+    'function exactInputSingle(tuple(address tokenIn, address tokenOut, uint24 fee, address recipient, uint256 deadline, uint256 amountIn, uint256 amountOutMinimum, uint160 sqrtPriceLimitX96)) external payable returns (uint256 amountOut)',
+];
+
+// --- ADDRESSES ---
+// UPDATED with the new contract address from your successful deployment
+const DEPLOYED_CONTRACT = '0x7ea3df7c51815EF99BfEf5d2122C62e9D6308a22'; 
 const UNISWAP_ROUTER = '0xE592427A0AEce92De3Edee1F18E0157C05861564';
 const WETH = '0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2';
 
-async function buyUSDC(
-  signer: any,
-  usdcAddress: string,
-  amountUSDC: string
-): Promise<void> {
-  console.log('\nBuying USDC with ETH via Uniswap...');
-  
-  // Wrap ETH to WETH
-  const weth = new ethers.Contract(WETH, WETH_ABI, signer);
-  const ethAmount = ethers.utils.parseEther('1');
-  
-  console.log('   1. Wrapping 1 ETH to WETH...');
-  const wrapTx = await weth.deposit({ value: ethAmount });
-  await wrapTx.wait();
-  console.log('      WETH obtained');
 
-  // Approve Uniswap router
-  console.log('   2. Approving Uniswap router...');
-  const approveTx = await weth.approve(UNISWAP_ROUTER, ethAmount);
-  await approveTx.wait();
-  console.log('      Router approved');
+async function buyUSDC(signer: ethers.Wallet, usdcAddress: string): Promise<void> {
+    console.log('\nBuying USDC to fund test wallet...');
+    const weth = new ethers.Contract(WETH, WETH_ABI, signer);
+    const ethAmount = ethers.utils.parseEther('1'); // Use 1 ETH to buy USDC
 
-  // Swap WETH for USDC
-  console.log('   3. Swapping WETH for USDC...');
-  const router = new ethers.Contract(UNISWAP_ROUTER, UNISWAP_ROUTER_ABI, signer);
-  
-  const params = {
-    tokenIn: WETH,
-    tokenOut: usdcAddress,
-    fee: 500,
-    recipient: signer.address,
-    deadline: Math.floor(Date.now() / 1000) + 60 * 20,
-    amountIn: ethAmount,
-    amountOutMinimum: 0,
-    sqrtPriceLimitX96: 0,
-  };
+    console.log('   1. Wrapping 1 ETH to WETH...');
+    await (await weth.deposit({ value: ethAmount })).wait();
+    console.log('      WETH obtained.');
 
-  const swapTx = await router.exactInputSingle(params);
-  await swapTx.wait();
-  console.log('      USDC purchased');
+    console.log('   2. Approving Uniswap router...');
+    await (await weth.approve(UNISWAP_ROUTER, ethAmount)).wait();
+    console.log('      Router approved.');
 
-  // Check balance
-  const usdc = new ethers.Contract(usdcAddress, ERC20_ABI, signer);
-  const balance = await usdc.balanceOf(signer.address);
-  console.log(`      Got: ${ethers.utils.formatUnits(balance, 6)} USDC`);
+    console.log('   3. Swapping WETH for USDC...');
+    const router = new ethers.Contract(UNISWAP_ROUTER, UNISWAP_ROUTER_ABI, signer);
+    const params = {
+      tokenIn: WETH,
+      tokenOut: usdcAddress,
+      fee: 500, // 0.05% fee tier
+      recipient: signer.address,
+      deadline: Math.floor(Date.now() / 1000) + 60 * 20,
+      amountIn: ethAmount,
+      amountOutMinimum: 0,
+      sqrtPriceLimitX96: 0,
+    };
+    await (await router.exactInputSingle(params)).wait();
+    
+    const usdc = new ethers.Contract(usdcAddress, ERC20_ABI, signer);
+    const balance = await usdc.balanceOf(signer.address);
+    console.log(`      Success! Wallet now has: ${ethers.utils.formatUnits(balance, 6)} USDC`);
 }
+
 
 async function main() {
   console.log('Testing Deployed VusdArbitrage Contract on Tenderly\n');
 
-  // Load wallet from keystore (will prompt for password)
   console.log('Loading wallet from keystore...');
   const deployer = await loadWallet(ethers.provider);
-  console.log('Tester:', deployer.address);
+  console.log('Tester Wallet:', deployer.address);
+  console.log('ETH Balance:', ethers.utils.formatEther(await deployer.getBalance()), 'ETH');
 
-  const ethBalance = await deployer.getBalance();
-  console.log('ETH Balance:', ethers.utils.formatEther(ethBalance), 'ETH');
-
-  // Get network info
-  const network = await ethers.provider.getNetwork();
-  console.log('Network:', network.name, `(Chain ID: ${network.chainId})`);
-
-  // Connect to deployed contract with deployer as signer
-  console.log('\nDeployed Contract:', DEPLOYED_CONTRACT);
+  console.log('\nConnecting to deployed contract:', DEPLOYED_CONTRACT);
   const contract = await ethers.getContractAt('VusdArbitrage', DEPLOYED_CONTRACT, deployer);
-  console.log('Contract connected');
 
-  // Verify contract owner
   const owner = await contract.owner();
-  console.log('Contract Owner:', owner);
-  
   if (owner.toLowerCase() !== deployer.address.toLowerCase()) {
     throw new Error('You are not the contract owner! Cannot execute trades.');
   }
+  console.log('   ✅ Confirmed you are the contract owner.');
 
-  // Get token addresses from contract
   const USDC = await contract.USDC();
-  const CRVUSD = await contract.CRVUSD();
-  const VUSD = await contract.VUSD();
+  const usdc = new ethers.Contract(USDC, ERC20_ABI, deployer);
 
-  console.log('\nToken Addresses:');
-  console.log('   USDC:', USDC);
-  console.log('   crvUSD:', CRVUSD);
-  console.log('   VUSD:', VUSD);
-
-  // Connect to USDC token with deployer as signer
-  const usdc = await ethers.getContractAt(ERC20_ABI, USDC, deployer);
-
-  // Check deployer's USDC balance
   let deployerUSDC = await usdc.balanceOf(deployer.address);
-  console.log('\nYour USDC Balance:', ethers.utils.formatUnits(deployerUSDC, 6), 'USDC');
-
-  // Buy USDC if we don't have any
-  if (deployerUSDC.eq(0)) {
-    await buyUSDC(deployer, USDC, '100000');
+  if (deployerUSDC.isZero()) {
+    await buyUSDC(deployer, USDC);
     deployerUSDC = await usdc.balanceOf(deployer.address);
   }
 
-  // Transfer ALL your USDC to contract
-  console.log('\nTransferring USDC to contract...');
-  const transferAmount = deployerUSDC;
-  const transferTx = await usdc.transfer(DEPLOYED_CONTRACT, transferAmount);
-  await transferTx.wait();
-  console.log(`   Transferred ${ethers.utils.formatUnits(transferAmount, 6)} USDC to contract`);
-
-  // Check contract's USDC balance
-  const contractBalance = await usdc.balanceOf(DEPLOYED_CONTRACT);
-  console.log('Contract USDC Balance:', ethers.utils.formatUnits(contractBalance, 6), 'USDC');
-
-  // Get default pool info
-  const defaultPool = await contract.DEFAULT_UNISWAP_V3_POOL();
-  const usdcIsToken1 = await contract.USDC_IS_TOKEN1_IN_DEFAULT_POOL();
-  
-  console.log('\nDefault Pool Configuration:');
-  console.log('   Pool:', defaultPool);
-  console.log('   USDC Position:', usdcIsToken1 ? 'token1' : 'token0');
-
-  // Test RICH scenario
-  console.log('\n' + '='.repeat(80));
-  console.log('TEST 1: RICH SCENARIO (crvUSD expensive vs VUSD)');
-  console.log('Path: USDC -> crvUSD -> VUSD -> USDC (via redeem)');
-  console.log('='.repeat(80));
+  console.log(`\nTransferring ${ethers.utils.formatUnits(deployerUSDC, 6)} USDC to contract for testing...`);
+  await (await usdc.transfer(DEPLOYED_CONTRACT, deployerUSDC)).wait();
+  console.log('   ✅ Transfer complete.');
 
   const flashloanAmount = ethers.utils.parseUnits('1000', 6);
-  console.log('\nFlashloan Amount:', ethers.utils.formatUnits(flashloanAmount, 6), 'USDC');
 
-  const balanceBefore = await usdc.balanceOf(DEPLOYED_CONTRACT);
-  console.log('Contract Balance Before:', ethers.utils.formatUnits(balanceBefore, 6), 'USDC');
+  // ========================================================================
+  // TEST 1: RICH SCENARIO
+  // ========================================================================
+  console.log('\n' + '='.repeat(80));
+  console.log('TEST 1: RICH SCENARIO (crvUSD expensive vs VUSD)');
+  console.log('='.repeat(80));
+
+  const balanceBeforeRich = await usdc.balanceOf(DEPLOYED_CONTRACT);
+  console.log('Contract Balance Before:', ethers.utils.formatUnits(balanceBeforeRich, 6), 'USDC');
 
   try {
     console.log('\nExecuting RICH scenario...');
-    const tx = await contract.executeRichWithDefaultPool(flashloanAmount, {
+    
+    // *** NEW: Create the params struct ***
+    const richParams = {
+      minCrvUsdOut: 1, // Use 1 wei for basic execution test
+      minVusdOut: 1,
+      minUsdcOut: 1,
+    };
+
+    const tx = await contract.executeRichWithDefaultPool(flashloanAmount, richParams, {
       gasLimit: 5000000,
     });
     
-    console.log('Transaction sent:', tx.hash);
-    console.log('Waiting for confirmation...');
-    
+    console.log('   Transaction sent:', tx.hash);
+    console.log('   Waiting for confirmation...');
     const receipt = await tx.wait();
-    console.log('Transaction confirmed!');
-    console.log('   Block:', receipt.blockNumber);
-    console.log('   Gas Used:', receipt.gasUsed.toString());
+    console.log('   ✅ Transaction confirmed in block', receipt.blockNumber);
 
-    // Check final balance
-    const balanceAfter = await usdc.balanceOf(DEPLOYED_CONTRACT);
-    console.log('\nContract Balance After:', ethers.utils.formatUnits(balanceAfter, 6), 'USDC');
+    const balanceAfterRich = await usdc.balanceOf(DEPLOYED_CONTRACT);
+    console.log('\nContract Balance After:', ethers.utils.formatUnits(balanceAfterRich, 6), 'USDC');
 
-    // Calculate profit/loss
-    const diff = balanceAfter.sub(balanceBefore);
-    if (diff.gt(0)) {
-      console.log('PROFIT:', ethers.utils.formatUnits(diff, 6), 'USDC');
-    } else if (diff.lt(0)) {
-      console.log('LOSS:', ethers.utils.formatUnits(diff.abs(), 6), 'USDC');
-    } else {
-      console.log('BREAK EVEN: 0 USDC');
-    }
-
-    // Parse events from logs
-    console.log('\nTransaction Events:');
-    let eventCount = 0;
-    for (const log of receipt.logs) {
-      try {
-        const parsed = contract.interface.parseLog(log);
-        console.log(`   ${parsed.name}`);
-        eventCount++;
-      } catch (e) {
-        // Skip unparseable logs
-      }
-    }
-    if (eventCount === 0) {
-      console.log('   (No contract events emitted)');
-    }
+    const diff = balanceAfterRich.sub(balanceBeforeRich);
+    console.log(`   Result: ${diff.isNegative() ? 'LOSS of' : 'PROFIT of'} ${ethers.utils.formatUnits(diff.abs(), 6)} USDC`);
 
   } catch (error: any) {
-    console.error('\nRICH scenario failed:', error.message);
-    if (error.error?.message) {
-      console.error('   Reason:', error.error.message);
-    }
+    console.error('\n   ❌ RICH scenario FAILED:', error.message);
   }
 
-  // Test CHEAP scenario
+  // ========================================================================
+  // TEST 2: CHEAP SCENARIO
+  // ========================================================================
   console.log('\n' + '='.repeat(80));
   console.log('TEST 2: CHEAP SCENARIO (crvUSD cheap vs VUSD)');
-  console.log('Path: USDC -> VUSD (via mint) -> crvUSD -> USDC');
   console.log('='.repeat(80));
 
   const balanceBeforeCheap = await usdc.balanceOf(DEPLOYED_CONTRACT);
-  console.log('\nContract Balance Before:', ethers.utils.formatUnits(balanceBeforeCheap, 6), 'USDC');
+  console.log('Contract Balance Before:', ethers.utils.formatUnits(balanceBeforeCheap, 6), 'USDC');
 
   try {
     console.log('\nExecuting CHEAP scenario...');
-    const tx = await contract.executeCheapWithDefaultPool(flashloanAmount, {
+
+    // *** NEW: Create the params struct ***
+    const cheapParams = {
+      minVusdOut: 1, // Use 1 wei for basic execution test
+      minCrvUsdOut: 1,
+      minUsdcOut: 1,
+    };
+
+    const tx = await contract.executeCheapWithDefaultPool(flashloanAmount, cheapParams, {
       gasLimit: 5000000,
     });
     
-    console.log('Transaction sent:', tx.hash);
-    console.log('Waiting for confirmation...');
-    
+    console.log('   Transaction sent:', tx.hash);
+    console.log('   Waiting for confirmation...');
     const receipt = await tx.wait();
-    console.log('Transaction confirmed!');
-    console.log('   Block:', receipt.blockNumber);
-    console.log('   Gas Used:', receipt.gasUsed.toString());
+    console.log('   ✅ Transaction confirmed in block', receipt.blockNumber);
 
-    // Check final balance
     const balanceAfterCheap = await usdc.balanceOf(DEPLOYED_CONTRACT);
     console.log('\nContract Balance After:', ethers.utils.formatUnits(balanceAfterCheap, 6), 'USDC');
-
-    // Calculate profit/loss
+    
     const diff = balanceAfterCheap.sub(balanceBeforeCheap);
-    if (diff.gt(0)) {
-      console.log('PROFIT:', ethers.utils.formatUnits(diff, 6), 'USDC');
-    } else if (diff.lt(0)) {
-      console.log('LOSS:', ethers.utils.formatUnits(diff.abs(), 6), 'USDC');
-    } else {
-      console.log('BREAK EVEN: 0 USDC');
-    }
-
-    // Parse events
-    console.log('\nTransaction Events:');
-    let eventCount = 0;
-    for (const log of receipt.logs) {
-      try {
-        const parsed = contract.interface.parseLog(log);
-        console.log(`   ${parsed.name}`);
-        eventCount++;
-      } catch (e) {
-        // Skip unparseable logs
-      }
-    }
-    if (eventCount === 0) {
-      console.log('   (No contract events emitted)');
-    }
+    console.log(`   Result: ${diff.isNegative() ? 'LOSS of' : 'PROFIT of'} ${ethers.utils.formatUnits(diff.abs(), 6)} USDC`);
 
   } catch (error: any) {
-    console.error('\nCHEAP scenario failed:', error.message);
-    if (error.error?.message) {
-      console.error('   Reason:', error.error.message);
-    }
+    console.error('\n   ❌ CHEAP scenario FAILED:', error.message);
   }
 
-  // Final summary
   console.log('\n' + '='.repeat(80));
   console.log('TESTING COMPLETE');
   console.log('='.repeat(80));
 
   const finalBalance = await usdc.balanceOf(DEPLOYED_CONTRACT);
   console.log('\nFinal Contract Balance:', ethers.utils.formatUnits(finalBalance, 6), 'USDC');
-
-  console.log('\nContract testing complete!');
-  console.log('\nNext Steps:');
-  console.log('   1. Review the results above');
-  console.log('   2. If both scenarios work: Deploy to mainnet');
-  console.log('   3. If issues found: Fix and redeploy to Tenderly');
-  console.log('\nReady for mainnet deployment when you are!\n');
 }
 
 main()
@@ -294,3 +188,4 @@ main()
     console.error('\nTest failed:', error);
     process.exit(1);
   });
+

@@ -13,6 +13,9 @@ FLASHBOTS_AUTH_KEY=independent_different_private_key
 # Moved from searcher_private_key to keystore_path
 KEYSTORE_PATH=[full_path]/searcher.json
 
+# Deployed mainnet VUSD-arbitrage-contract address
+VUSD_ARBITRAGE_CONTRACT=0x7ea3df7c51815EF99BfEf5d2122C62e9D6308a22
+
 # Contract Addresses
 USDC_ADDRESS=0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48
 CRVUSD_ADDRESS=0xf939E0A03FB07F59A73314E73794Be0E57ac1b4E

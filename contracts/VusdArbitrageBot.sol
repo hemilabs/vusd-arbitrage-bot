@@ -6,12 +6,15 @@ import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
 // ============================================================================
-// GAS-OPTIMIZED & HARDENED VERSION (v2.1)
+// GAS-OPTIMIZED & REFACTORED VERSION (v2.1.1)
 // Implements 4 specific gas optimizations:
 // 1. Removes `initialBalance` state var (saves 1 SSTORE + 1 SLOAD)
 // 2. Removes redundant `if/else` on immutable `USDC_IS_TOKEN1_IN_DEFAULT_POOL`
 // 3. Removes redundant `== 0` checks after external calls
 // 4. Optimizes constructor approvals (saves deployment gas)
+//
+// Implements 1 code quality refactor:
+// 1. Consolidates `execute...` logic into a private `_executeFlashloan` function
 //
 // Maintains all critical security features from v2.0:
 // 1. Critical callback vulnerability fix (s_activePool check)
@@ -109,6 +112,7 @@ contract VusdArbitrage is IUniswapV3FlashCallback, ReentrancyGuard {
     // ========================================================================
     // STATE VARIABLES
     // ========================================================================
+    // `initialBalance` state var removed and passed via calldata to save gas
     address private s_activePool; // SECURITY FIX: Tracks the pool expecting a callback
 
     // ========================================================================
@@ -144,7 +148,7 @@ contract VusdArbitrage is IUniswapV3FlashCallback, ReentrancyGuard {
         CRVUSD_VUSD_POOL_CRVUSD_INDEX = _crvUsdVusdPoolCrvUsdIndex;
         CRVUSD_VUSD_POOL_VUSD_INDEX = _crvUsdVusdPoolVusdIndex;
 
-        // GAS OPTIMIZATION: Use direct safeApprove, _safeApproveWithReset is not needed in constructor
+        // GAS OPTIMIZATION: Use direct safeApprove
         IERC20(USDC).safeApprove(VUSD_MINTER, type(uint256).max);
         IERC20(USDC).safeApprove(CURVE_CRVUSD_USDC_POOL, type(uint256).max);
         IERC20(CRVUSD).safeApprove(CURVE_CRVUSD_USDC_POOL, type(uint256).max);
@@ -163,17 +167,11 @@ contract VusdArbitrage is IUniswapV3FlashCallback, ReentrancyGuard {
         // GAS OPTIMIZATION: Get balance as local var, pass via calldata. (Saves SSTORE)
         uint256 initialUsdcBalance = IERC20(USDC).balanceOf(address(this));
         
-        s_activePool = DEFAULT_UNISWAP_V3_POOL;
-        
         // GAS OPTIMIZATION: Pass initialUsdcBalance in calldata
         bytes memory data = abi.encode(1, _flashloanAmount, DEFAULT_UNISWAP_V3_POOL, USDC_IS_TOKEN1_IN_DEFAULT_POOL, initialUsdcBalance, _params);
         
-        // GAS OPTIMIZATION: Removed if/else check on immutable var
-        uint256 amount0 = USDC_IS_TOKEN1_IN_DEFAULT_POOL ? 0 : _flashloanAmount;
-        uint256 amount1 = USDC_IS_TOKEN1_IN_DEFAULT_POOL ? _flashloanAmount : 0;
-        IUniswapV3Pool(DEFAULT_UNISWAP_V3_POOL).flash(address(this), amount0, amount1, data);
-        
-        s_activePool = address(0);
+        // Call the internal flashloan executor
+        _executeFlashloan(_flashloanAmount, data);
     }
 
     function executeCheapWithDefaultPool(uint256 _flashloanAmount, CheapParams calldata _params) external {
@@ -183,31 +181,23 @@ contract VusdArbitrage is IUniswapV3FlashCallback, ReentrancyGuard {
         // GAS OPTIMIZATION: Get balance as local var, pass via calldata. (Saves SSTORE)
         uint256 initialUsdcBalance = IERC20(USDC).balanceOf(address(this));
         
-        s_activePool = DEFAULT_UNISWAP_V3_POOL;
-
         // GAS OPTIMIZATION: Pass initialUsdcBalance in calldata
         bytes memory data = abi.encode(2, _flashloanAmount, DEFAULT_UNISWAP_V3_POOL, USDC_IS_TOKEN1_IN_DEFAULT_POOL, initialUsdcBalance, _params);
 
-        // GAS OPTIMIZATION: Removed if/else check on immutable var
-        uint256 amount0 = USDC_IS_TOKEN1_IN_DEFAULT_POOL ? 0 : _flashloanAmount;
-        uint256 amount1 = USDC_IS_TOKEN1_IN_DEFAULT_POOL ? _flashloanAmount : 0;
-        IUniswapV3Pool(DEFAULT_UNISWAP_V3_POOL).flash(address(this), amount0, amount1, data);
-        
-        s_activePool = address(0);
+        // Call the internal flashloan executor
+        _executeFlashloan(_flashloanAmount, data);
     }
-    
-    // NOTE: `executeRich` and `executeCheap` for custom pools are omitted for simplicity
     
     // ========================================================================
     // UNISWAP V3 FLASHLOAN CALLBACK
     // ========================================================================
     function uniswapV3FlashCallback(uint256 fee0, uint256 fee1, bytes calldata data) external override nonReentrant {
-        // CRITICAL SECURITY CHECK: Only the pool we initiated the flashloan with can call this.
+        // CRITICAL SECURITY CHECK
         if (msg.sender != s_activePool) revert InvalidCaller();
-        if (s_activePool == address(0)) revert InvalidCaller(); // Belt-and-suspenders check
+        if (s_activePool == address(0)) revert InvalidCaller();
         
         address pool = s_activePool;
-        s_activePool = address(0); // Clear pool *before* logic to prevent re-entrancy
+        s_activePool = address(0);
         
         uint256 usdcFee;
         uint256 totalRepayment;
@@ -309,6 +299,23 @@ contract VusdArbitrage is IUniswapV3FlashCallback, ReentrancyGuard {
     // ========================================================================
     // INTERNAL HELPER FUNCTIONS
     // ========================================================================
+    
+    /**
+     * @dev Internal function to execute the Uniswap V3 flashloan.
+     * REFACTORED to consolidate logic from executeRich/Cheap.
+     */
+    function _executeFlashloan(uint256 _flashloanAmount, bytes memory _data) private {
+        s_activePool = DEFAULT_UNISWAP_V3_POOL;
+
+        // GAS OPTIMIZATION: Removed if/else check on immutable var
+        uint256 amount0 = USDC_IS_TOKEN1_IN_DEFAULT_POOL ? 0 : _flashloanAmount;
+        uint256 amount1 = USDC_IS_TOKEN1_IN_DEFAULT_POOL ? _flashloanAmount : 0;
+        
+        IUniswapV3Pool(DEFAULT_UNISWAP_V3_POOL).flash(address(this), amount0, amount1, _data);
+        
+        s_activePool = address(0);
+    }
+
     function _safeApproveWithReset(IERC20 token, address spender, uint256 amount) private {
         uint256 currentAllowance = token.allowance(address(this), spender);
         if (currentAllowance != 0) token.safeApprove(spender, 0);

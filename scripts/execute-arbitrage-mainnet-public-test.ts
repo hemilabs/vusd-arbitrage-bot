@@ -186,7 +186,7 @@ async function main() {
         // Set EIP-1559 gas parameters
         populatedTx.gasLimit = 600000;
         // We still use a high priority fee to get it mined quickly
-        const priorityFee = ethers.utils.parseUnits('15', 'gwei');
+        const priorityFee = ethers.utils.parseUnits('3', 'gwei');
         populatedTx.maxFeePerGas = block.baseFeePerGas!.add(priorityFee);
         populatedTx.maxPriorityFeePerGas = priorityFee;
         populatedTx.chainId = (await provider.getNetwork()).chainId;

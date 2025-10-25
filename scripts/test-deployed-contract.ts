@@ -26,7 +26,7 @@ const UNISWAP_ROUTER_ABI = [
 
 // --- ADDRESSES ---
 // UPDATED with the new contract address from your successful deployment
-const DEPLOYED_CONTRACT = '0x7ea3df7c51815EF99BfEf5d2122C62e9D6308a22'; 
+const DEPLOYED_CONTRACT = '0xc022E25051147f21FB353514E471E8189CA4c750';  
 const UNISWAP_ROUTER = '0xE592427A0AEce92De3Edee1F18E0157C05861564';
 const WETH = '0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2';
 
@@ -124,7 +124,7 @@ async function main() {
     console.log('   Waiting for confirmation...');
     const receipt = await tx.wait();
     console.log('   ✅ Transaction confirmed in block', receipt.blockNumber);
-
+    console.log('   Gas Used:', receipt.gasUsed.toString());
     const balanceAfterRich = await usdc.balanceOf(DEPLOYED_CONTRACT);
     console.log('\nContract Balance After:', ethers.utils.formatUnits(balanceAfterRich, 6), 'USDC');
 
@@ -163,6 +163,7 @@ async function main() {
     console.log('   Waiting for confirmation...');
     const receipt = await tx.wait();
     console.log('   ✅ Transaction confirmed in block', receipt.blockNumber);
+    console.log('   Gas Used:', receipt.gasUsed.toString());
 
     const balanceAfterCheap = await usdc.balanceOf(DEPLOYED_CONTRACT);
     console.log('\nContract Balance After:', ethers.utils.formatUnits(balanceAfterCheap, 6), 'USDC');
